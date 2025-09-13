@@ -1,0 +1,383 @@
+openapi: 3.0.3
+info:
+  title: Crew AI Studio API
+  version: 1.0.0
+  description: API para projetos, agentes, tasks, execuções, importação/exportação e integrações
+servers:
+  - url: http://localhost:8000
+paths:
+  /health:
+    get:
+      summary: Healthcheck
+      responses:
+        '200': { description: OK }
+
+  /projects:
+    get:
+      summary: Listar projetos
+      responses:
+        '200':
+          description: Lista de projetos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+    post:
+      summary: Criar projeto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectCreate' }
+      responses:
+        '201': { description: Criado, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+
+  /projects/{project_id}:
+    parameters:
+      - in: path
+        name: project_id
+        required: true
+        schema: { type: integer }
+    get:
+      summary: Obter projeto
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '404': { description: Não encontrado }
+    put:
+      summary: Atualizar projeto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectUpdate' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+    delete:
+      summary: Deletar projeto
+      responses:
+        '204': { description: Sem conteúdo }
+
+  /projects/{project_id}/agents:
+    parameters:
+      - in: path
+        name: project_id
+        required: true
+        schema: { type: integer }
+    get:
+      summary: Listar agentes do projeto
+      responses:
+        '200':
+          description: Lista de agentes
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Agent' } } } }
+    post:
+      summary: Criar agente no projeto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentCreate' }
+      responses:
+        '201': { description: Criado, content: { application/json: { schema: { $ref: '#/components/schemas/Agent' } } } }
+
+  /agents/{agent_id}:
+    parameters:
+      - in: path
+        name: agent_id
+        required: true
+        schema: { type: integer }
+    put:
+      summary: Atualizar agente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentUpdate' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Agent' } } } }
+    delete:
+      summary: Deletar agente
+      responses:
+        '204': { description: Sem conteúdo }
+
+  /projects/{project_id}/tasks:
+    parameters:
+      - in: path
+        name: project_id
+        required: true
+        schema: { type: integer }
+    get:
+      summary: Listar tasks do projeto
+      responses:
+        '200': { description: Lista de tasks, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Task' } } } } }
+    post:
+      summary: Criar task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskCreate' }
+      responses:
+        '201': { description: Criado, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+
+  /tasks/{task_id}:
+    parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema: { type: integer }
+    put:
+      summary: Atualizar task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskUpdate' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+    delete:
+      summary: Deletar task
+      responses:
+        '204': { description: Sem conteúdo }
+
+  /executions:
+    get:
+      summary: Listar execuções
+      parameters:
+        - in: query
+          name: project_id
+          schema: { type: integer }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Execution' } } } } }
+
+  /executions/{execution_id}:
+    parameters:
+      - in: path
+        name: execution_id
+        required: true
+        schema: { type: integer }
+    get:
+      summary: Obter execução
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Execution' } } } }
+
+  /execute/project/{project_id}:
+    parameters:
+      - in: path
+        name: project_id
+        required: true
+        schema: { type: integer }
+    post:
+      summary: Executar projeto completo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExecuteRequest' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Execution' } } } }
+
+  /execute/agent/{agent_id}:
+    parameters:
+      - in: path
+        name: agent_id
+        required: true
+        schema: { type: integer }
+    post:
+      summary: Executar agente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExecuteRequest' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Execution' } } } }
+
+  /execute/task/{task_id}:
+    parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema: { type: integer }
+    post:
+      summary: Executar task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExecuteRequest' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Execution' } } } }
+
+  /import/json:
+    post:
+      summary: Importar projeto via JSON (ou workflow n8n)
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { type: object } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+
+  /import/agents-yaml:
+    post:
+      summary: Importar agentes YAML
+      parameters:
+        - in: query
+          name: project_id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+
+  /import/tasks-yaml:
+    post:
+      summary: Importar tasks YAML
+      parameters:
+        - in: query
+          name: project_id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+
+  /import/zip:
+    post:
+      summary: Importar projeto completo ZIP
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+
+  /export/{project_id}/zip:
+    get:
+      summary: Exportar projeto ZIP
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema: { type: integer }
+      responses: { '200': { description: OK } }
+
+  /settings:
+    get:
+      summary: Listar settings
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Setting' } } } } }
+
+  /settings/{key}:
+    put:
+      summary: Atualizar setting
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Setting' } } } }
+
+components:
+  schemas:
+    Project:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        model_provider: { type: string, enum: [openrouter, gemini] }
+        model_name: { type: string }
+        language: { type: string, enum: [pt, en, es, fr] }
+        created_at: { type: string, nullable: true }
+        updated_at: { type: string, nullable: true }
+    ProjectCreate:
+      allOf:
+        - $ref: '#/components/schemas/Project'
+      required: [name]
+    ProjectUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        model_provider: { type: string, enum: [openrouter, gemini] }
+        model_name: { type: string }
+        language: { type: string, enum: [pt, en, es, fr] }
+    Agent:
+      type: object
+      properties:
+        id: { type: integer }
+        project_id: { type: integer }
+        name: { type: string }
+        role: { type: string }
+        goal: { type: string }
+        backstory: { type: string }
+        tools: { type: array, items: { type: string } }
+        verbose: { type: boolean }
+        memory: { type: boolean }
+        allow_delegation: { type: boolean }
+    AgentCreate:
+      allOf:
+        - $ref: '#/components/schemas/Agent'
+      required: [name, role, goal]
+    AgentUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        role: { type: string }
+        goal: { type: string }
+        backstory: { type: string }
+        tools: { type: array, items: { type: string } }
+        verbose: { type: boolean }
+        memory: { type: boolean }
+        allow_delegation: { type: boolean }
+    Task:
+      type: object
+      properties:
+        id: { type: integer }
+        project_id: { type: integer }
+        agent_id: { type: integer }
+        description: { type: string }
+        expected_output: { type: string }
+        tools: { type: array, items: { type: string } }
+        async_execution: { type: boolean }
+        output_file: { type: string }
+    TaskCreate:
+      allOf:
+        - $ref: '#/components/schemas/Task'
+      required: [agent_id, description]
+    TaskUpdate:
+      type: object
+      properties:
+        agent_id: { type: integer }
+        description: { type: string }
+        expected_output: { type: string }
+        tools: { type: array, items: { type: string } }
+        async_execution: { type: boolean }
+        output_file: { type: string }
+    Execution:
+      type: object
+      properties:
+        id: { type: integer }
+        project_id: { type: integer }
+        status: { type: string }
+        input_payload: { type: object }
+        output_payload: { type: object }
+        logs: { type: string }
+        created_at: { type: string }
+    ExecuteRequest:
+      type: object
+      properties:
+        inputs: { type: object }
+        language: { type: string, enum: [pt, en, es, fr] }
+    Setting:
+      type: object
+      properties:
+        key: { type: string }
+        value: { type: string }
+

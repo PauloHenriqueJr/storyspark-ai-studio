@@ -1,0 +1,14 @@
+- agent: "Planejador de Projetos"
+  description: "Converter requisitos de {topic} em épicos e histórias."
+  expected_output: "Tabela com épicos, histórias e critérios."
+  tools: []
+  async_execution: false
+  output_file: ""
+
+- agent: "Escritor Técnico"
+  description: "Escrever README inicial do projeto sobre {topic}."
+  expected_output: "README.md com objetivos, arquitetura e setup."
+  tools: []
+  async_execution: false
+  output_file: "README.md"
+

@@ -1,0 +1,6 @@
+# Exemplo de configurações salvas no banco
+# Essas chaves ficam persistentes e são carregadas automaticamente
+
+OPENROUTER_API_KEY=sua_chave_openrouter_aqui
+GEMINI_API_KEY=sua_chave_gemini_aqui
+SERPER_API_KEY=sua_chave_serper_aqui
