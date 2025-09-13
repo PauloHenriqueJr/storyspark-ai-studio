@@ -173,7 +173,7 @@ export default function Run() {
   
   // Toast on status change (replaces onSuccess)
   useEffect(() => {
-    if (currentExecution && currentExecution.status !== 'running') {
+    if (currentExecution && !isRunning) {
       setProgress(100);
       let title = '';
       let description = '';
@@ -199,7 +199,7 @@ export default function Run() {
         toast({ title, description, variant: currentExecution.status === 'error' ? 'destructive' : 'default' });
       }
       // Invalidate related queries if needed
-      if (currentExecution.status !== 'running') {
+      if (!isRunning) {
         queryClient.invalidateQueries({ queryKey: queryKeys.executions() });
       }
     }

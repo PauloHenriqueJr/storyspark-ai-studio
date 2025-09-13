@@ -51,6 +51,15 @@ def create_app() -> FastAPI:
     app.include_router(import_export_router)
     app.include_router(auth_router)
     app.include_router(billing_router)
+
+    # AI Builder (prompt-to-flow)
+    try:
+        from .routers_builder import router as builder_router
+        app.include_router(builder_router)
+    except Exception:
+        # Router is optional; ignore import errors in constrained envs
+        pass
+
     return app
 
 

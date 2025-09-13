@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { useChatDockStore } from '@/lib/store';
+import { useChatDockStore, useProjectStore } from '@/lib/store';
+import { apiClient, queryClient, queryKeys } from '@/lib/api';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   MessageSquare, 
   X, 
@@ -16,7 +18,6 @@ import {
   Lightbulb
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
 const quickSuggestions = [
   'Create a customer support project',
   'Add a data analysis agent',
@@ -34,46 +35,155 @@ interface ChatMessage {
 }
 
 export function ChatDock() {
-  const { isOpen, setOpen, messages, addMessage } = useChatDockStore();
+  const { isOpen, setOpen, messages, addMessage, clearMessages } = useChatDockStore();
+  const { currentProject } = useProjectStore();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Only show chat in editor page
+  const isInEditor = location.pathname === '/app/editor';
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
+  const getActiveProjectId = async (): Promise<number | null> => {
+    try {
+      const url = new URL(window.location.href);
+      const fromUrl = url.searchParams.get('projectId');
+      if (fromUrl) return Number(fromUrl);
+    } catch {}
+    try {
+      if (currentProject?.id) return Number(currentProject.id);
+    } catch {}
+    try {
+      // Fallback: get first project from API
+      const res: any = await (await fetch(`${(window as any).VITE_API_BASE_URL || import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000'}/projects`)).json();
+      if (Array.isArray(res) && res.length > 0 && res[0].id) return Number(res[0].id);
+    } catch {}
+    return null;
+  };
+
+  const handleSendMessage = async (overrideInput?: string) => {
+    const messageText = String(overrideInput || inputValue || '');
+    if (!messageText || !messageText.trim()) return;
+
+    // If not in editor, navigate to editor with the prompt
+    if (!isInEditor) {
+      const projectId = await getActiveProjectId();
+      if (projectId) {
+        // Store prompt in session storage to process after navigation
+        sessionStorage.setItem('pendingPrompt', messageText);
+        navigate(`/app/editor?projectId=${projectId}`);
+      } else {
+        navigate('/app/projects');
+      }
+      return;
+    }
 
     const userMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
       type: 'user',
-      content: inputValue,
+      content: messageText,
       timestamp: new Date().toISOString(),
     };
 
     addMessage(userMessage);
-    setInputValue('');
+    if (!overrideInput) {
+      setInputValue('');
+    }
     setIsLoading(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    // Call AI Builder
+    try {
+      const projectIdNum = await getActiveProjectId();
+
+      if (projectIdNum) {
+        // Check if similar flow exists
+        try {
+          const similarCheck: any = await apiClient.builder.findSimilar(projectIdNum, messageText);
+          
+          if (similarCheck?.found) {
+            // Flow already exists, just notify and refresh
+            const assistantMessage: ChatMessage = {
+              id: `msg-${Date.now()}-ai`,
+              type: 'assistant',
+              content: similarCheck.message + `\n\nAgentes: ${similarCheck.agents_count}\nTarefas: ${similarCheck.tasks_count}\n\nO fluxo já está carregado no editor. Clique em Run para executar!`,
+              timestamp: new Date().toISOString(),
+              suggestions: [
+                'Executar workflow agora',
+                'Adicionar mais tarefas',
+                'Modificar agentes',
+              ],
+            };
+            addMessage(assistantMessage);
+            
+            // Just refresh the editor
+            await queryClient.invalidateQueries({ queryKey: queryKeys.agents(String(projectIdNum)) });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(String(projectIdNum)) });
+            setIsLoading(false);
+            return;
+          }
+        } catch (e) {
+          // Continue to create new flow if check fails
+        }
+        
+        // Create new flow
+        const res: any = await apiClient.builder.generate(projectIdNum, messageText);
+
+        // Remove markdown formatting from plan
+        const cleanPlan = (res?.plan || 'Plano gerado.')
+          .replace(/\*\*/g, '')
+          .replace(/##/g, '')
+          .replace(/###/g, '')
+          .replace(/🎯|📊|🤖|📋|✅/g, '');
+        
+        const assistantMessage: ChatMessage = {
+          id: `msg-${Date.now()}-ai`,
+          type: 'assistant',
+          content: `Fluxo criado para o projeto ${projectIdNum}.\n\n${cleanPlan}\n\nAgentes criados: ${res?.created_agents || 0}\nTarefas criadas: ${res?.created_tasks || 0}`,
+          timestamp: new Date().toISOString(),
+          suggestions: [
+            'Executar workflow agora',
+            'Adicionar mais uma tarefa',
+            'Editar agente criado',
+          ],
+        };
+        addMessage(assistantMessage);
+
+        // Refresh editor data so nodes appear
+        await queryClient.invalidateQueries({ queryKey: queryKeys.agents(String(projectIdNum)) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(String(projectIdNum)) });
+        
+        // Force page reload if we're already in the editor to ensure nodes appear
+        if (window.location.pathname === '/app/editor') {
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        }
+      } else {
+        // Fallback: ask user to create/select a project
+        const assistantMessage: ChatMessage = {
+          id: `msg-${Date.now()}-ai`,
+          type: 'assistant',
+          content: `Não encontrei nenhum projeto. Vá até Projetos e crie um projeto para continuarmos.`,
+          timestamp: new Date().toISOString(),
+          suggestions: [
+            'Abrir Projetos',
+          ],
+        };
+        addMessage(assistantMessage);
+        try { window.history.pushState({}, '', '/app/projects'); } catch {}
+      }
+    } catch (e: any) {
       const assistantMessage: ChatMessage = {
         id: `msg-${Date.now()}-ai`,
         type: 'assistant',
-        content: `I'll help you with "${inputValue}". Here's what I can do:
-
-1. Create a new project with appropriate agents and tasks
-2. Configure the necessary tools and integrations
-3. Set up the workflow in the visual editor
-
-Would you like me to proceed with creating this for you?`,
+        content: `Não consegui criar o fluxo automaticamente: ${e?.message || 'erro desconhecido'}`,
         timestamp: new Date().toISOString(),
-        suggestions: [
-          'Yes, create it',
-          'Show me the plan first',
-          'Modify the approach',
-        ],
       };
       addMessage(assistantMessage);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleSuggestionClick = (suggestion: string) => {
@@ -87,13 +197,36 @@ Would you like me to proceed with creating this for you?`,
     }
   };
 
+  // Process pending prompt after navigation
+  useEffect(() => {
+    if (isInEditor) {
+      const pendingPrompt = sessionStorage.getItem('pendingPrompt');
+      if (pendingPrompt) {
+        sessionStorage.removeItem('pendingPrompt');
+        setOpen(true);
+        setTimeout(() => {
+          setInputValue(pendingPrompt);
+          // Call without parameter since inputValue will be set
+          handleSendMessage();
+        }, 500);
+      }
+    }
+  }, [isInEditor]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Show button in all pages, but navigate to editor when clicked
   if (!isOpen) {
     return (
       <div className="fixed left-4 bottom-4 z-50">
         <Button
-          onClick={() => {
-            if (window.location.pathname !== '/app/editor') {
-              window.location.href = '/app/editor';
+          onClick={async () => {
+            if (!isInEditor) {
+              const pid = await getActiveProjectId();
+              if (pid) {
+                navigate(`/app/editor?projectId=${pid}`);
+                setTimeout(() => setOpen(true), 500);
+              } else {
+                navigate('/app/projects');
+              }
             } else {
               setOpen(true);
             }
@@ -102,10 +235,15 @@ Would you like me to proceed with creating this for you?`,
           size="lg"
         >
           <Sparkles className="h-5 w-5" />
-          Build with AI
+          {isInEditor ? 'AI Builder' : 'Build with AI'}
         </Button>
       </div>
     );
+  }
+  
+  // Only show chat dock in editor
+  if (!isInEditor) {
+    return null;
   }
 
   return (

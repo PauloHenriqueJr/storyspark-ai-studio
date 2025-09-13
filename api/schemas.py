@@ -142,3 +142,15 @@ from pydantic import BaseModel
 
 class CheckoutSessionRequest(BaseModel):
     price_id: str
+
+
+# ===== AI Builder =====
+class AIBuilderRequest(BaseModel):
+    project_id: int
+    prompt: str
+
+
+class AIBuilderResponse(BaseModel):
+    created_agents: int
+    created_tasks: int
+    plan: str | None = None
