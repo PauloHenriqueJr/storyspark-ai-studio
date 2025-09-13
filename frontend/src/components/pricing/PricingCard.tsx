@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Check, ArrowRight, Star } from "lucide-react";
 import { Link } from "react-router-dom";
+import { createCheckoutSession } from "@/lib/stripe";
+import { useState } from "react";
 
 interface PricingCardProps {
   name: string;
@@ -16,22 +18,30 @@ interface PricingCardProps {
   stripePriceId?: string; // For Stripe integration
 }
 
-export function PricingCard({ 
-  name, 
-  price, 
-  period, 
-  description, 
-  features, 
-  cta, 
-  popular = false, 
+export function PricingCard({
+  name,
+  price,
+  period,
+  description,
+  features,
+  cta,
+  popular = false,
   stripeLink,
-  stripePriceId 
+  stripePriceId
 }: PricingCardProps) {
-  const handleSubscribe = () => {
-    // This will be implemented when Stripe is integrated
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubscribe = async () => {
     if (stripePriceId) {
-      // Stripe checkout logic here
-      console.log('Starting Stripe checkout for:', stripePriceId);
+      setIsLoading(true);
+      try {
+        await createCheckoutSession(stripePriceId);
+      } catch (error) {
+        console.error('Failed to start checkout:', error);
+        // You might want to show a toast notification here
+      } finally {
+        setIsLoading(false);
+      }
     } else {
       // Redirect to app for free plan
       window.location.href = '/app/dashboard';
@@ -67,12 +77,13 @@ export function PricingCard({
             </li>
           ))}
         </ul>
-        <Button 
+        <Button
           className={`w-full ${popular ? '' : 'variant-outline'}`}
           variant={popular ? 'default' : 'outline'}
           onClick={handleSubscribe}
+          disabled={isLoading}
         >
-          {cta}
+          {isLoading ? 'Processando...' : cta}
           <ArrowRight className="h-4 w-4 ml-2" />
         </Button>
       </CardContent>

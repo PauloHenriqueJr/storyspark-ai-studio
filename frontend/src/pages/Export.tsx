@@ -5,11 +5,11 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
-  Download, 
-  FileText, 
-  Package, 
-  Code, 
+import {
+  Download,
+  FileText,
+  Package,
+  Code,
   CheckCircle,
   AlertCircle,
   Archive,
@@ -18,7 +18,8 @@ import {
   Folder
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { mockProjects } from '@/lib/api.mock';
+import { apiClient, queryKeys } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
 
 export default function Export() {
   const { toast } = useToast();
@@ -27,43 +28,43 @@ export default function Export() {
   const [exportResult, setExportResult] = useState<any>(null);
   const [selectedProject, setSelectedProject] = useState<string>('');
 
+  const { data: projects = [] } = useQuery({
+    queryKey: queryKeys.projects(),
+    queryFn: () => apiClient.getProjects(),
+  });
+
   const handleExportProject = async (projectId: string, format: 'zip' | 'json') => {
     setIsExporting(true);
     setExportProgress(0);
     setExportResult(null);
 
     try {
-      // Simulate export process
-      const progressInterval = setInterval(() => {
-        setExportProgress(prev => Math.min(prev + 10, 90));
-      }, 200);
+      // Start export process
+      setExportProgress(10);
 
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      clearInterval(progressInterval);
+      let blob: Blob;
+      let fileName: string;
+
+      if (format === 'zip') {
+        // Export as ZIP
+        blob = await apiClient.exportProject(projectId);
+        const project = (projects as any[]).find(p => String(p.id) === String(projectId));
+        fileName = `${project?.name?.replace(/\s+/g, '_')}_export.zip`;
+      } else {
+        // Export as JSON - get project data and create JSON blob
+        const project = (projects as any[]).find(p => String(p.id) === String(projectId));
+        const projectData = {
+          project,
+          exported_at: new Date().toISOString(),
+          version: '1.0'
+        };
+        blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+        fileName = `${project?.name?.replace(/\s+/g, '_')}_export.json`;
+      }
+
       setExportProgress(100);
 
-      const project = mockProjects.find(p => p.id === projectId);
-      const result = {
-        success: true,
-        project_name: project?.name,
-        format,
-        files: [
-          'project.json',
-          'agents.yaml', 
-          'tasks.yaml',
-          'crew.py',
-          'main.py',
-          'tools.py',
-          'requirements.txt'
-        ],
-        size: '2.4 MB'
-      };
-
-      setExportResult(result);
-
-      // Simulate file download
-      const fileName = `${project?.name?.replace(/\s+/g, '_')}_export.${format}`;
-      const blob = new Blob(['Export content'], { type: format === 'zip' ? 'application/zip' : 'application/json' });
+      // Create download link
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -73,6 +74,7 @@ export default function Export() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
+      const project = (projects as any[]).find(p => String(p.id) === String(projectId));
       toast({
         title: "Export Successful",
         description: `${project?.name} exported successfully as ${format.toUpperCase()}`,
@@ -158,7 +160,7 @@ export default function Export() {
 
       {/* Project Export Cards */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {mockProjects.map((project) => (
+        {(projects as any[]).map((project) => (
           <Card key={project.id} className="card-notion">
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -216,8 +218,8 @@ export default function Export() {
               <div className="space-y-2">
                 <h4 className="text-sm font-medium">Export Options</h4>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => handleExportProject(project.id, 'zip')}
                     disabled={isExporting}
@@ -226,8 +228,8 @@ export default function Export() {
                     <Archive className="h-4 w-4" />
                     ZIP Package
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => handleExportProject(project.id, 'json')}
                     disabled={isExporting}

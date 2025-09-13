@@ -9,6 +9,7 @@ from .routers_executions import router as executions_router
 from .routers_settings import router as settings_router
 from .routers_import_export import router as import_export_router
 from .routers_auth import router as auth_router
+from .routers_billing import router as billing_router
 from db.seed import init_db
 
 
@@ -49,6 +50,7 @@ def create_app() -> FastAPI:
     app.include_router(settings_router)
     app.include_router(import_export_router)
     app.include_router(auth_router)
+    app.include_router(billing_router)
     return app
 
 

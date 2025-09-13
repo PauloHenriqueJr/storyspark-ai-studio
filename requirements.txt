@@ -13,3 +13,5 @@ python-multipart==0.0.9
 PyYAML==6.0.2
 passlib[bcrypt]==1.7.4
 python-jose==3.3.0
+# Stripe
+stripe==10.3.0

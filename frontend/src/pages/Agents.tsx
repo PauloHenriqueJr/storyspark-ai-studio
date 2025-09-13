@@ -45,6 +45,18 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
+import { NewAgentModal } from '@/components/modals/new-agent-modal';
+import { EditAgentModal } from '@/components/modals/edit-agent-modal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiClient, queryKeys } from '@/lib/api';
@@ -59,19 +71,12 @@ export default function Agents() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
-  const [newAgent, setNewAgent] = useState({
-    name: '',
-    role: '',
-    goal: '',
-    backstory: '',
-    tools: [] as string[],
-    verbose: false,
-    memory: true,
-    allow_delegation: false
-  });
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
   const { data: projects } = useQuery({
-    queryKey: queryKeys.projects(),
+    queryKey: ['projects'],
     queryFn: () => apiClient.getProjects()
   });
 
@@ -101,34 +106,6 @@ export default function Agents() {
     (agent.goal || '').toLowerCase().includes(searchTerm.toLowerCase())
   ));
 
-  const handleCreateAgent = () => {
-    if (!newAgent.name || !newAgent.role || !newAgent.goal || !selectedProjectId) {
-      toast({
-        title: "Campos Obrigatórios",
-        description: "Preencha todos os campos obrigatórios",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Simulate API call
-    toast({
-      title: "Agente Criado",
-      description: `${newAgent.name} foi criado com sucesso`,
-    });
-
-    setIsCreateDialogOpen(false);
-    setNewAgent({
-      name: '',
-      role: '',
-      goal: '',
-      backstory: '',
-      tools: [],
-      verbose: false,
-      memory: true,
-      allow_delegation: false
-    });
-  };
 
   const handleAgentAction = (action: string, agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
@@ -141,10 +118,8 @@ export default function Agents() {
         });
         break;
       case 'edit':
-        toast({
-          title: "Editar Agente",
-          description: "Funcionalidade de edição em desenvolvimento",
-        });
+        setEditingAgent(agent);
+        setIsEditDialogOpen(true);
         break;
       case 'duplicate':
         toast({
@@ -153,12 +128,29 @@ export default function Agents() {
         });
         break;
       case 'delete':
-        toast({
-          title: "Agente Removido",
-          description: `${agent?.name} foi removido permanentemente`,
-          variant: "destructive",
-        });
+        setDeleteTarget(agent);
         break;
+    }
+  };
+
+  const confirmDeleteAgent = async () => {
+    if (!deleteTarget) return;
+    try {
+      await apiClient.deleteAgent(String(deleteTarget.id));
+      await qc.invalidateQueries({ queryKey: queryKeys.agents(selectedProjectId) });
+      setDeleteTarget(null);
+      toast({
+        title: "Agente Removido",
+        description: `${deleteTarget.name} foi removido permanentemente`,
+        variant: "destructive",
+      });
+    } catch (error) {
+      console.error('Error deleting agent:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível remover o agente",
+        variant: "destructive",
+      });
     }
   };
 
@@ -199,127 +191,42 @@ export default function Agents() {
             </p>
           </div>
 
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="btn-primary gap-3 px-6 py-3 text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group">
-                <Plus className="h-5 w-5 group-hover:rotate-90 transition-transform duration-300" />
-                Novo Agente
-              </Button>
-            </DialogTrigger>
+          <NewAgentModal
+            open={isCreateDialogOpen}
+            onOpenChange={setIsCreateDialogOpen}
+            projectId={selectedProjectId}
+          />
 
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Criar Novo Agente</DialogTitle>
-                <DialogDescription>
-                  Configure um novo agente para seu projeto
-                </DialogDescription>
-              </DialogHeader>
+          <EditAgentModal
+            open={isEditDialogOpen}
+            onOpenChange={setIsEditDialogOpen}
+            agent={editingAgent}
+            projectId={selectedProjectId}
+          />
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="agent-name">Nome do Agente *</Label>
-                    <Input
-                      id="agent-name"
-                      placeholder="Ex: João Silva"
-                      value={newAgent.name}
-                      onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="agent-role">Função *</Label>
-                    <Input
-                      id="agent-role"
-                      placeholder="Ex: Escritor Criativo"
-                      value={newAgent.role}
-                      onChange={(e) => setNewAgent({ ...newAgent, role: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="agent-goal">Objetivo *</Label>
-                  <Textarea
-                    id="agent-goal"
-                    placeholder="Descreva o objetivo principal do agente..."
-                    value={newAgent.goal}
-                    onChange={(e) => setNewAgent({ ...newAgent, goal: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="agent-backstory">História de Fundo</Label>
-                  <Textarea
-                    id="agent-backstory"
-                    placeholder="Conte a história do agente..."
-                    value={newAgent.backstory}
-                    onChange={(e) => setNewAgent({ ...newAgent, backstory: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Ferramentas Disponíveis</Label>
-                  <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto border rounded-md p-2">
-                    {availableTools.map((tool) => (
-                      <div key={tool} className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id={tool}
-                          checked={newAgent.tools.includes(tool)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setNewAgent({ ...newAgent, tools: [...newAgent.tools, tool] });
-                            } else {
-                              setNewAgent({ ...newAgent, tools: newAgent.tools.filter(t => t !== tool) });
-                            }
-                          }}
-                        />
-                        <Label htmlFor={tool} className="text-sm">{tool}</Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="verbose"
-                      checked={newAgent.verbose}
-                      onCheckedChange={(checked) => setNewAgent({ ...newAgent, verbose: checked })}
-                    />
-                    <Label htmlFor="verbose">Verbose</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="memory"
-                      checked={newAgent.memory}
-                      onCheckedChange={(checked) => setNewAgent({ ...newAgent, memory: checked })}
-                    />
-                    <Label htmlFor="memory">Memória</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="delegation"
-                      checked={newAgent.allow_delegation}
-                      onCheckedChange={(checked) => setNewAgent({ ...newAgent, allow_delegation: checked })}
-                    />
-                    <Label htmlFor="delegation">Delegação</Label>
-                  </div>
-                </div>
-              </div>
-
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button onClick={handleCreateAgent}>
-                  Criar Agente
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir Agente?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta ação é irreversível. Tem certeza que deseja excluir o agente "{deleteTarget?.name}"? Todas as tasks associadas serão removidas.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setDeleteTarget(null)}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={confirmDeleteAgent}>
+                  Excluir
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <Button
+            className="btn-primary gap-3 px-6 py-3 text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group"
+            onClick={() => setIsCreateDialogOpen(true)}
+          >
+            <Plus className="h-5 w-5 group-hover:rotate-90 transition-transform duration-300" />
+            Novo Agente
+          </Button>
         </div>
       </div>
 
@@ -596,56 +503,58 @@ export default function Agents() {
         ))}
       </div>
 
-      {filteredAgents.length === 0 && (
-        <div className="text-center py-16">
-          <div className="relative mb-6">
-            <div className="w-24 h-24 bg-gradient-to-br from-primary/20 to-primary/5 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Users className="h-12 w-12 text-primary/60" />
-            </div>
-            <div className="absolute -top-2 -right-2 w-8 h-8 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center animate-bounce">
-              <Plus className="h-4 w-4 text-white" />
-            </div>
-          </div>
-
-          <h3 className="text-2xl font-bold mb-3 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-            {searchTerm ? 'Nenhum agente encontrado' : 'Comece criando seu primeiro agente'}
-          </h3>
-
-          <p className="text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
-            {searchTerm
-              ? 'Tente ajustar os termos da sua busca ou remova os filtros para ver todos os agentes disponíveis.'
-              : 'Agentes são os membros da sua equipe de IA. Cada um tem habilidades específicas e trabalha em conjunto para completar tarefas complexas.'
-            }
-          </p>
-
-          {!searchTerm && (
-            <div className="space-y-4">
-              <Button
-                onClick={() => setIsCreateDialogOpen(true)}
-                className="btn-primary gap-3 px-8 py-3 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-              >
-                <Plus className="h-5 w-5" />
-                Criar Primeiro Agente
-              </Button>
-
-              <div className="flex justify-center gap-4 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-primary rounded-full"></div>
-                  <span>Organize por projetos</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span>Configure ferramentas</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span>Defina objetivos claros</span>
-                </div>
+      {
+        filteredAgents.length === 0 && (
+          <div className="text-center py-16">
+            <div className="relative mb-6">
+              <div className="w-24 h-24 bg-gradient-to-br from-primary/20 to-primary/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Users className="h-12 w-12 text-primary/60" />
+              </div>
+              <div className="absolute -top-2 -right-2 w-8 h-8 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center animate-bounce">
+                <Plus className="h-4 w-4 text-white" />
               </div>
             </div>
-          )}
-        </div>
-      )}
-    </div>
+
+            <h3 className="text-2xl font-bold mb-3 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              {searchTerm ? 'Nenhum agente encontrado' : 'Comece criando seu primeiro agente'}
+            </h3>
+
+            <p className="text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
+              {searchTerm
+                ? 'Tente ajustar os termos da sua busca ou remova os filtros para ver todos os agentes disponíveis.'
+                : 'Agentes são os membros da sua equipe de IA. Cada um tem habilidades específicas e trabalha em conjunto para completar tarefas complexas.'
+              }
+            </p>
+
+            {!searchTerm && (
+              <div className="space-y-4">
+                <Button
+                  onClick={() => setIsCreateDialogOpen(true)}
+                  className="btn-primary gap-3 px-8 py-3 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                >
+                  <Plus className="h-5 w-5" />
+                  Criar Primeiro Agente
+                </Button>
+
+                <div className="flex justify-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-primary rounded-full"></div>
+                    <span>Organize por projetos</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <span>Configure ferramentas</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span>Defina objetivos claros</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      }
+    </div >
   );
 }

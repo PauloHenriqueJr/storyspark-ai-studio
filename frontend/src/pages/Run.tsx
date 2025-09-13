@@ -10,6 +10,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Play, Square, Activity, FileText, Download, XCircle, Settings, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient, queryKeys } from '@/lib/api';
+import type { Execution } from '@/types/execution';
+import type { Agent as AgentType } from '@/types/agent';
+import type { Task as TaskType } from '@/types/task';
 import { useQuery } from '@tanstack/react-query';
 
 export default function Run() {
@@ -51,14 +54,14 @@ export default function Run() {
     const load = async () => {
       if (!selectedProject) return;
       try {
-        const ag = await apiClient.getProjectAgents(selectedProject);
-        const tk = await apiClient.getProjectTasks(selectedProject);
+        const ag = await apiClient.getProjectAgents(selectedProject) as AgentType[];
+        const tk = await apiClient.getProjectTasks(selectedProject) as TaskType[];
         setAgents(ag || []);
         setTasks(tk || []);
         if (!selectedAgent && ag && ag.length) setSelectedAgent(String(ag[0].id));
         if (!selectedTask && tk && tk.length) setSelectedTask(String(tk[0].id));
         // Suggest input keys from task descriptions
-        const text = (tk || []).map((t: any) => `${t.description} ${t.expected_output || ''}`).join(' ');
+        const text = (tk || []).map((t: TaskType) => `${t.description} ${t.expected_output || ''}`).join(' ');
         const vars = Array.from(text.matchAll(/\{([a-zA-Z0-9_]+)\}/g)).map(m => m[1]);
         const example: Record<string, string> = {};
         const defaults: Record<string, string> = { topic: 'IA', industry: 'tecnologia', platform: 'Instagram' };
@@ -87,12 +90,15 @@ export default function Run() {
 
       const progressInterval = setInterval(() => setProgress((p) => (p >= 90 ? 90 : p + 10)), 400);
       // Start execution (returns running execution with id)
-      const started = await apiClient.run.project(Number(selectedProject), { inputs: parsedInput, language });
+      const started = await apiClient.run.project(Number(selectedProject), { inputs: parsedInput, language }) as Execution;
+      if (!started || !started.id) {
+        throw new Error('Falha ao iniciar execução: ID não encontrado');
+      }
       setCurrentExecution(started);
       // Poll until completed/error
       const poll = setInterval(async () => {
         try {
-          const latest = await apiClient.executions.get(started.id);
+          const latest = await apiClient.executions.get(Number(started.id)) as Execution;
           setCurrentExecution(latest);
           if (latest.status !== 'running') {
             clearInterval(poll);
@@ -123,11 +129,18 @@ export default function Run() {
     setProgress(10);
     try {
       const parsed = agentInput?.trim() ? JSON.parse(agentInput) : {};
-      const started = await apiClient.run.agent(Number(selectedAgent), { inputs: parsed, language });
+      const started = await apiClient.run.agent(Number(selectedAgent), { inputs: parsed, language }) as Execution;
+      if (!started || !started.id) {
+        throw new Error('Falha ao iniciar execução do agente: ID não encontrado');
+      }
       const poll = setInterval(async () => {
-        const latest = await apiClient.executions.get(started.id);
+        const latest = await apiClient.executions.get(Number(started.id)) as Execution;
         setCurrentExecution(latest);
-        if (latest.status !== 'running') { clearInterval(poll); setIsRunning(false); setProgress(100); }
+        if (latest.status !== 'running') {
+          clearInterval(poll);
+          setIsRunning(false);
+          setProgress(100);
+        }
       }, 1000);
     } catch (e: any) {
       setIsRunning(false);
@@ -141,11 +154,18 @@ export default function Run() {
     setProgress(10);
     try {
       const parsed = taskInput?.trim() ? JSON.parse(taskInput) : {};
-      const started = await apiClient.run.task(Number(selectedTask), { inputs: parsed, language });
+      const started = await apiClient.run.task(Number(selectedTask), { inputs: parsed, language }) as Execution;
+      if (!started || !started.id) {
+        throw new Error('Falha ao iniciar execução da task: ID não encontrado');
+      }
       const poll = setInterval(async () => {
-        const latest = await apiClient.executions.get(started.id);
+        const latest = await apiClient.executions.get(Number(started.id)) as Execution;
         setCurrentExecution(latest);
-        if (latest.status !== 'running') { clearInterval(poll); setIsRunning(false); setProgress(100); }
+        if (latest.status !== 'running') {
+          clearInterval(poll);
+          setIsRunning(false);
+          setProgress(100);
+        }
       }, 1000);
     } catch (e: any) {
       setIsRunning(false);
