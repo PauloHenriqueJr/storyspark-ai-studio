@@ -26,3 +26,13 @@ def set_setting(key: str, payload: SettingUpdate, db: Session = Depends(get_db))
     db.commit()
     return {"key": key, "value": s.value}
 
+
+@router.delete("/{key}", status_code=204)
+def delete_setting(key: str, db: Session = Depends(get_db)):
+    s = db.query(models.Settings).filter_by(key=key).first()
+    if not s:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Setting not found")
+    db.delete(s)
+    db.commit()
+

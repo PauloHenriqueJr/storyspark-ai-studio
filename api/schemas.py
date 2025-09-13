@@ -9,7 +9,7 @@ class ProjectBase(BaseModel):
     description: str = ""
     model_provider: Literal["openrouter", "gemini"] = "openrouter"
     model_name: str = "openrouter/gpt-4o-mini"
-    language: Literal["pt", "en", "es", "fr"] = "pt"
+    language: Literal["pt", "pt-br", "en", "es", "fr"] = "pt-br"
 
     model_config = {
         "protected_namespaces": ()
@@ -25,7 +25,7 @@ class ProjectUpdate(BaseModel):
     description: Optional[str] = None
     model_provider: Optional[Literal["openrouter", "gemini"]] = None
     model_name: Optional[str] = None
-    language: Optional[Literal["pt", "en", "es", "fr"]] = None
+    language: Optional[Literal["pt", "pt-br", "en", "es", "fr"]] = None
 
 
 class ProjectRead(ProjectBase):
