@@ -22,8 +22,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Target, Play, FileText, Clock, Zap } from 'lucide-react';
 import { apiClient, queryKeys } from '@/lib/api';
-import { useQueryClient } from '@tanstack/react-query';
-import { useQuery } from '@tanstack/react-query';
+import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 import { AVAILABLE_TOOLS } from '@/types/agent';
 import { Agent } from '@/types/agent';
 import { extractVariables } from '@/types/task';
@@ -80,9 +80,11 @@ export function NewTaskModal({ open, onOpenChange, projectId }: NewTaskModalProp
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [variables, setVariables] = useState([] as any[]);
 
-  const { data: agents } = useQuery<Agent[]>({
+  const { toast } = useToast();
+
+  const { data: agents = [] } = useQuery<Agent[], Error>({
     queryKey: queryKeys.agents(projectId),
-    queryFn: () => apiClient.getProjectAgents(projectId),
+    queryFn: () => apiClient.getProjectAgents(projectId) as Promise<Agent[]>,
     enabled: !!projectId && open,
   });
 
@@ -93,22 +95,17 @@ export function NewTaskModal({ open, onOpenChange, projectId }: NewTaskModalProp
     setVariables(extractVariables(value));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.agent_id || !formData.description.trim() || !formData.expected_output.trim()) return;
-
-    setIsLoading(true);
-    try {
-      await apiClient.createTask(projectId, {
-        agent_id: formData.agent_id,
-        description: formData.description,
-        expected_output: formData.expected_output,
-        tools: selectedTools,
-        async_execution: formData.async_execution,
-        output_file: formData.output_file,
-      });
-      // Refresh tasks list
-      await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
+  const createTaskMutation = useMutation({
+    mutationFn: () => apiClient.createTask(projectId, {
+      agent_id: formData.agent_id,
+      description: formData.description,
+      expected_output: formData.expected_output,
+      tools: selectedTools,
+      async_execution: formData.async_execution,
+      output_file: formData.output_file,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
       onOpenChange(false);
       // Reset form
       setFormData({
@@ -121,11 +118,28 @@ export function NewTaskModal({ open, onOpenChange, projectId }: NewTaskModalProp
         template: '',
       });
       setSelectedTools([]);
-    } catch (e) {
-      console.error('Create task failed', e);
-    } finally {
-      setIsLoading(false);
+      toast({ title: "Tarefa criada com sucesso" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao criar tarefa",
+        description: error.message || "Falha na criação",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.agent_id || !formData.description.trim() || !formData.expected_output.trim()) {
+      toast({
+        title: "Validação falhou",
+        description: "Preencha agente, descrição e resultado esperado",
+        variant: "destructive",
+      });
+      return;
     }
+    createTaskMutation.mutate();
   };
 
   const handleInputChange = (field: string, value: any) => {
@@ -329,9 +343,9 @@ export function NewTaskModal({ open, onOpenChange, projectId }: NewTaskModalProp
             <Button
               type="submit"
               className="btn-primary gap-2"
-              disabled={!formData.agent_id || !formData.description.trim() || !formData.expected_output.trim() || isLoading}
+              disabled={createTaskMutation.isPending || !formData.agent_id || !formData.description.trim() || !formData.expected_output.trim()}
             >
-              {isLoading ? (
+              {createTaskMutation.isPending ? (
                 <>
                   <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                   Criando...

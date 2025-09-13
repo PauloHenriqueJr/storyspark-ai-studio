@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Download,
   FileText,
@@ -19,7 +20,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient, queryKeys } from '@/lib/api';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ProjectWithStats } from '@/types/project';
 
 export default function Export() {
   const { toast } = useToast();
@@ -27,44 +29,34 @@ export default function Export() {
   const [exportProgress, setExportProgress] = useState(0);
   const [exportResult, setExportResult] = useState<any>(null);
   const [selectedProject, setSelectedProject] = useState<string>('');
+  const [selectedFormat, setSelectedFormat] = useState<'zip' | 'json'>('zip');
 
-  const { data: projects = [] } = useQuery({
-    queryKey: queryKeys.projects(),
-    queryFn: () => apiClient.getProjects(),
-  });
+  const queryClient = useQueryClient();
 
-  const handleExportProject = async (projectId: string, format: 'zip' | 'json') => {
-    setIsExporting(true);
-    setExportProgress(0);
-    setExportResult(null);
-
-    try {
-      // Start export process
-      setExportProgress(10);
-
-      let blob: Blob;
-      let fileName: string;
-
+  const exportMutation = useMutation({
+    mutationFn: async ({ projectId, format }: { projectId: string; format: 'zip' | 'json' }) => {
       if (format === 'zip') {
-        // Export as ZIP
-        blob = await apiClient.exportProject(projectId);
-        const project = (projects as any[]).find(p => String(p.id) === String(projectId));
-        fileName = `${project?.name?.replace(/\s+/g, '_')}_export.zip`;
+        return apiClient.exportProject(projectId);
       } else {
-        // Export as JSON - get project data and create JSON blob
-        const project = (projects as any[]).find(p => String(p.id) === String(projectId));
-        const projectData = {
-          project,
+        const projectData = await apiClient.getProject(projectId);
+        const exportData = {
+          project: projectData,
           exported_at: new Date().toISOString(),
           version: '1.0'
         };
-        blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
-        fileName = `${project?.name?.replace(/\s+/g, '_')}_export.json`;
+        return new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
       }
+    },
+    onMutate: () => {
+      setIsExporting(true);
+      setExportProgress(50);
+      setExportResult(null);
+    },
+    onSuccess: (blob, variables) => {
+      const project = projects.find((p: ProjectWithStats) => p.id === variables.projectId);
+      const extension = variables.format === 'zip' ? 'zip' : 'json';
+      const fileName = `${project?.name?.replace(/\s+/g, '_')}_export.${extension}`;
 
-      setExportProgress(100);
-
-      // Create download link
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -74,25 +66,51 @@ export default function Export() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      const project = (projects as any[]).find(p => String(p.id) === String(projectId));
+      const filesList = variables.format === 'zip'
+        ? ['project.json', 'agents.yaml', 'tasks.yaml', 'crew.py', 'main.py', 'tools.py', 'requirements.txt']
+        : ['project_export.json'];
+
+      setExportResult({
+        success: true,
+        project_name: project?.name,
+        format: variables.format,
+        size: `${(blob.size / 1024).toFixed(1)} KB`,
+        files: filesList,
+      });
+
       toast({
         title: "Export Successful",
-        description: `${project?.name} exported successfully as ${format.toUpperCase()}`,
+        description: `${project?.name} exported successfully as ${variables.format.toUpperCase()}. Download initiated.`,
       });
-    } catch (error) {
+
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects() });
+      setExportProgress(100);
+    },
+    onError: (error) => {
       setExportResult({
         success: false,
-        error: 'Failed to export project. Please try again.'
+        error: error.message || 'Failed to export project. Please try again.',
       });
+
       toast({
         title: "Export Failed",
         description: "An error occurred during export. Please try again.",
         variant: "destructive",
       });
-    } finally {
+    },
+    onSettled: () => {
       setIsExporting(false);
-    }
-  };
+      setExportProgress(0);
+    },
+  });
+
+  const { data: projectsData } = useQuery({
+    queryKey: queryKeys.projects(),
+    queryFn: () => apiClient.getProjects(),
+  });
+
+  const projects: ProjectWithStats[] = Array.isArray(projectsData) ? projectsData : [];
+
 
   return (
     <div className="space-y-6">
@@ -105,6 +123,64 @@ export default function Export() {
         <p className="text-muted-foreground">Export your projects as ZIP archives or JSON files</p>
       </div>
 
+      {/* Selection Controls */}
+      <Card className="card-notion">
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Select value={selectedProject} onValueChange={setSelectedProject}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um projeto" />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedFormat} onValueChange={(value) => setSelectedFormat(value as 'zip' | 'json')}>
+              <SelectTrigger>
+                <SelectValue placeholder="Formato de export" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="zip">
+                  <div className="flex items-center gap-2">
+                    <Archive className="h-4 w-4" />
+                    ZIP Package
+                  </div>
+                </SelectItem>
+                <SelectItem value="json">
+                  <div className="flex items-center gap-2">
+                    <FileJson className="h-4 w-4" />
+                    JSON Only
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button
+              onClick={() => selectedProject && exportMutation.mutate({ projectId: selectedProject, format: selectedFormat })}
+              disabled={!selectedProject || exportMutation.isPending}
+              className="gap-2"
+            >
+              {exportMutation.isPending ? (
+                <>
+                  <Package className="h-4 w-4 animate-spin" />
+                  Exportando...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  Exportar
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Export Progress */}
       {isExporting && (
         <Card className="card-notion">
@@ -116,7 +192,7 @@ export default function Export() {
               </div>
               <Progress value={exportProgress} className="h-2" />
               <p className="text-xs text-muted-foreground">
-                Generating project files, agents configuration, and Python code
+                {selectedFormat === 'zip' ? 'Generating ZIP archive with project files...' : 'Preparing JSON export data...'}
               </p>
             </div>
           </CardContent>
@@ -158,9 +234,52 @@ export default function Export() {
         </Alert>
       )}
 
+      {/* Project Preview */}
+      {selectedProject && projects.length > 0 && (
+        <Card className="card-notion">
+          <CardHeader>
+            <CardTitle className="text-lg">Preview: {projects.find(p => p.id === selectedProject)?.name}</CardTitle>
+            <CardDescription>Informações do projeto selecionado para export</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div>
+                <div className="text-lg font-semibold text-heading">{projects.find(p => p.id === selectedProject)?.agents_count}</div>
+                <div className="text-xs text-muted-foreground">Agents</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-heading">{projects.find(p => p.id === selectedProject)?.tasks_count}</div>
+                <div className="text-xs text-muted-foreground">Tasks</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-heading">{projects.find(p => p.id === selectedProject)?.executions_count}</div>
+                <div className="text-xs text-muted-foreground">Runs</div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Model:</span>
+                <Badge variant="outline">{projects.find(p => p.id === selectedProject)?.model_provider}</Badge>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Language:</span>
+                <span className="font-medium">{projects.find(p => p.id === selectedProject)?.language.toUpperCase()}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Created:</span>
+                <span className="font-medium">{new Date(projects.find(p => p.id === selectedProject)?.created_at || '').toLocaleDateString()}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Project Export Cards */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {(projects as any[]).map((project) => (
+        {projects.map((project) => (
           <Card key={project.id} className="card-notion">
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -214,32 +333,6 @@ export default function Export() {
 
               <Separator />
 
-              {/* Export Options */}
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium">Export Options</h4>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleExportProject(project.id, 'zip')}
-                    disabled={isExporting}
-                    className="gap-2"
-                  >
-                    <Archive className="h-4 w-4" />
-                    ZIP Package
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleExportProject(project.id, 'json')}
-                    disabled={isExporting}
-                    className="gap-2"
-                  >
-                    <FileJson className="h-4 w-4" />
-                    JSON Only
-                  </Button>
-                </div>
-              </div>
             </CardContent>
           </Card>
         ))}

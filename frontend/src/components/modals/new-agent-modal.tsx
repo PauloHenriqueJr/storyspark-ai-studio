@@ -23,7 +23,8 @@ import { Badge } from '@/components/ui/badge';
 import { Bot, Target, Brain, Zap } from 'lucide-react';
 import { apiClient, queryKeys } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 import { AVAILABLE_TOOLS } from '@/types/agent';
 
 interface NewAgentModalProps {
@@ -65,43 +66,11 @@ const agentTemplates = [
 
 export function NewAgentModal({ open, onOpenChange, projectId }: NewAgentModalProps) {
   const queryClient = useQueryClient();
-  const [formData, setFormData] = useState({
-    name: '',
-    role: '',
-    goal: '',
-    backstory: '',
-    tools: [] as string[],
-    verbose: false,
-    memory: true,
-    allow_delegation: true,
-    template: '',
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [selectedTools, setSelectedTools] = useState<string[]>([]);
-
-  const { data: projectAgents } = useQuery({
-    queryKey: queryKeys.agents(projectId),
-    queryFn: () => apiClient.getProjectAgents(projectId),
-    enabled: !!projectId && open,
-  });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim() || !formData.role.trim() || !formData.goal.trim()) return;
-
-    setIsLoading(true);
-    try {
-      await apiClient.createAgent(projectId, {
-        name: formData.name,
-        role: formData.role,
-        goal: formData.goal,
-        backstory: formData.backstory,
-        tools: selectedTools,
-        verbose: formData.verbose,
-        memory: formData.memory,
-        allow_delegation: formData.allow_delegation,
-      });
-      // Refresh agents list
+  const { toast } = useToast();
+  
+  const createAgentMutation = useMutation({
+    mutationFn: (data: any) => apiClient.createAgent(projectId, data),
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.agents(projectId) });
       onOpenChange(false);
       // Reset form
@@ -117,11 +86,62 @@ export function NewAgentModal({ open, onOpenChange, projectId }: NewAgentModalPr
         template: '',
       });
       setSelectedTools([]);
-    } catch (e) {
-      console.error('Create agent failed', e);
-    } finally {
-      setIsLoading(false);
+      toast({
+        title: "Agente Criado",
+        description: "O agente foi criado com sucesso!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao Criar Agente",
+        description: error.message || "Falha ao criar o agente. Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const [formData, setFormData] = useState({
+    name: '',
+    role: '',
+    goal: '',
+    backstory: '',
+    tools: [] as string[],
+    verbose: false,
+    memory: true,
+    allow_delegation: true,
+    template: '',
+  });
+  const [selectedTools, setSelectedTools] = useState<string[]>([]);
+
+  const { data: projectAgents } = useQuery({
+    queryKey: queryKeys.agents(projectId),
+    queryFn: () => apiClient.getProjectAgents(projectId),
+    enabled: !!projectId && open,
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { name, role, goal } = formData;
+    if (!name.trim() || !role.trim() || !goal.trim()) {
+      toast({
+        title: "Validação",
+        description: "Nome, função e objetivo são obrigatórios.",
+        variant: "destructive",
+      });
+      return;
     }
+  
+    const data = {
+      name: formData.name,
+      role: formData.role,
+      goal: formData.goal,
+      backstory: formData.backstory,
+      tools: selectedTools,
+      verbose: formData.verbose,
+      memory: formData.memory,
+      allow_delegation: formData.allow_delegation,
+    };
+    createAgentMutation.mutate(data);
   };
 
   const handleInputChange = (field: string, value: any) => {
@@ -325,16 +345,16 @@ export function NewAgentModal({ open, onOpenChange, projectId }: NewAgentModalPr
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={isLoading}
+              disabled={createAgentMutation.isPending}
             >
               Cancelar
             </Button>
             <Button
               type="submit"
               className="btn-primary gap-2"
-              disabled={!formData.name.trim() || !formData.role.trim() || !formData.goal.trim() || isLoading}
+              disabled={createAgentMutation.isPending || !formData.name.trim() || !formData.role.trim() || !formData.goal.trim()}
             >
-              {isLoading ? (
+              {createAgentMutation.isPending ? (
                 <>
                   <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                   Criando...

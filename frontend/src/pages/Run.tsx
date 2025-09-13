@@ -10,10 +10,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Play, Square, Activity, FileText, Download, XCircle, Settings, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient, queryKeys } from '@/lib/api';
-import type { Execution } from '@/types/execution';
+import type { Execution, ExecutionStatus } from '@/types/execution';
 import type { Agent as AgentType } from '@/types/agent';
 import type { Task as TaskType } from '@/types/task';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 export default function Run() {
   const location = useLocation();
@@ -21,9 +21,9 @@ export default function Run() {
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [language, setLanguage] = useState<'pt'|'en'|'es'|'fr'>('pt');
   const [inputData, setInputData] = useState<string>('{}');
-  const [isRunning, setIsRunning] = useState(false);
+  const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
-  const [currentExecution, setCurrentExecution] = useState<any>(null);
+  const queryClient = useQueryClient();
   const [agents, setAgents] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>('');
@@ -79,108 +79,144 @@ export default function Run() {
       toast({ title: 'Projeto necessário', description: 'Selecione um projeto', variant: 'destructive' });
       return;
     }
-
-    setIsRunning(true);
-    setProgress(0);
-    setCurrentExecution(null);
-
+  
     try {
       let parsedInput: any = {};
       if (inputData.trim()) parsedInput = JSON.parse(inputData);
-
-      const progressInterval = setInterval(() => setProgress((p) => (p >= 90 ? 90 : p + 10)), 400);
+  
       // Start execution (returns running execution with id)
       const started = await apiClient.run.project(Number(selectedProject), { inputs: parsedInput, language }) as Execution;
       if (!started || !started.id) {
         throw new Error('Falha ao iniciar execução: ID não encontrado');
       }
-      setCurrentExecution(started);
-      // Poll until completed/error
-      const poll = setInterval(async () => {
-        try {
-          const latest = await apiClient.executions.get(Number(started.id)) as Execution;
-          setCurrentExecution(latest);
-          if (latest.status !== 'running') {
-            clearInterval(poll);
-            clearInterval(progressInterval);
-            setProgress(100);
-            const name = projectOptions.find((p: any) => String(p.id) === selectedProject)?.name;
-            toast({ title: latest.status === 'completed' ? 'Execução concluída' : 'Execução finalizada', description: `${name || 'Projeto'}: ${latest.status}` });
-          }
-        } catch {}
-      }, 1000);
+      setCurrentExecutionId(started.id);
+      // Progress starts indeterminate
+      setProgress(0);
+      const name = projectOptions.find((p: any) => String(p.id) === selectedProject)?.name;
+      toast({ title: 'Execução iniciada', description: `${name || 'Projeto'}: Iniciando...` });
     } catch (e: any) {
-      setCurrentExecution({ status: 'error', error_message: e?.message || 'Falha na execução' });
       toast({ title: 'Erro na execução', description: e?.message || 'Falha ao executar', variant: 'destructive' });
-    } finally {
-      setIsRunning(false);
     }
   };
 
   const handleStop = () => {
-    setIsRunning(false);
+    setCurrentExecutionId(null);
     setProgress(0);
-    setCurrentExecution({ status: 'cancelled', error_message: 'Execução cancelada pelo usuário' });
+    toast({ title: 'Execução cancelada', description: 'Execução cancelada pelo usuário' });
   };
 
   const runAgent = async () => {
     if (!selectedAgent) return;
-    setIsRunning(true);
-    setProgress(10);
     try {
       const parsed = agentInput?.trim() ? JSON.parse(agentInput) : {};
       const started = await apiClient.run.agent(Number(selectedAgent), { inputs: parsed, language }) as Execution;
       if (!started || !started.id) {
         throw new Error('Falha ao iniciar execução do agente: ID não encontrado');
       }
-      const poll = setInterval(async () => {
-        const latest = await apiClient.executions.get(Number(started.id)) as Execution;
-        setCurrentExecution(latest);
-        if (latest.status !== 'running') {
-          clearInterval(poll);
-          setIsRunning(false);
-          setProgress(100);
-        }
-      }, 1000);
+      setCurrentExecutionId(started.id);
+      setProgress(0);
+      toast({ title: 'Execução de agente iniciada', description: `Agente: ${agents.find(a => String(a.id) === selectedAgent)?.name || 'Desconhecido'}` });
     } catch (e: any) {
-      setIsRunning(false);
       toast({ title: 'Erro', description: e?.message || 'Falha ao executar agente', variant: 'destructive' });
     }
   };
 
   const runTask = async () => {
     if (!selectedTask) return;
-    setIsRunning(true);
-    setProgress(10);
     try {
       const parsed = taskInput?.trim() ? JSON.parse(taskInput) : {};
       const started = await apiClient.run.task(Number(selectedTask), { inputs: parsed, language }) as Execution;
       if (!started || !started.id) {
         throw new Error('Falha ao iniciar execução da task: ID não encontrado');
       }
-      const poll = setInterval(async () => {
-        const latest = await apiClient.executions.get(Number(started.id)) as Execution;
-        setCurrentExecution(latest);
-        if (latest.status !== 'running') {
-          clearInterval(poll);
-          setIsRunning(false);
-          setProgress(100);
-        }
-      }, 1000);
+      setCurrentExecutionId(started.id);
+      setProgress(0);
+      toast({ title: 'Execução de task iniciada', description: `Task: ${tasks.find(t => String(t.id) === selectedTask)?.description?.slice(0, 50) || 'Desconhecida'}` });
     } catch (e: any) {
-      setIsRunning(false);
       toast({ title: 'Erro', description: e?.message || 'Falha ao executar task', variant: 'destructive' });
     }
   };
 
-  const getStatusBadge = (status?: string) => {
+  const getStatusBadge = (status?: ExecutionStatus) => {
     switch (status) {
       case 'completed': return <Badge className="bg-accent-green text-white">Concluído</Badge>;
       case 'error': return <Badge variant="destructive">Erro</Badge>;
       case 'running': return <Badge variant="outline">Em execução</Badge>;
+      case 'created': return <Badge variant="secondary">Criado</Badge>;
       default: return <Badge variant="secondary">N/A</Badge>;
     }
   };
+  
+  const executionQuery = useQuery<Execution, Error>({
+    queryKey: ['execution', currentExecutionId],
+    queryFn: () => currentExecutionId ? apiClient.executions.get(Number(currentExecutionId)) as Promise<Execution> : Promise.reject(new Error('No execution ID')),
+    enabled: !!currentExecutionId,
+    refetchInterval: (query) => query.state.data?.status === 'running' ? 1000 : false,
+    refetchIntervalInBackground: true,
+    retry: 3,
+  });
+  
+  // Handle query errors
+  useEffect(() => {
+    if (executionQuery.error) {
+      toast({
+        title: 'Erro ao buscar execução',
+        description: executionQuery.error.message || 'Falha na conexão',
+        variant: 'destructive'
+      });
+    }
+  }, [executionQuery.error, toast]);
+  
+  const currentExecution: Execution | null = executionQuery.data ?? null;
+  const isRunning = currentExecution?.status === 'running';
+  const queryError = executionQuery.error;
+  
+  // Toast on status change (replaces onSuccess)
+  useEffect(() => {
+    if (currentExecution && currentExecution.status !== 'running') {
+      setProgress(100);
+      let title = '';
+      let description = '';
+      const projectName = projectOptions?.find((p: any) => String(p.id) === selectedProject)?.name;
+      const agentName = agents?.find((a: any) => String(a.id) === (currentExecution.agent_id || ''))?.name;
+      const taskDesc = tasks?.find((t: any) => String(t.id) === (currentExecution.task_id || ''))?.description?.slice(0, 50);
+      
+      switch (currentExecution.status) {
+        case 'completed':
+          title = 'Execução concluída';
+          description = `${projectName || agentName || taskDesc || 'Execução'}: Sucesso!`;
+          break;
+        case 'error':
+          title = 'Erro na execução';
+          description = `${projectName || agentName || taskDesc || 'Execução'}: ${currentExecution.error_message || 'Falha desconhecida'}`;
+          break;
+        case 'created':
+          title = 'Execução criada';
+          description = 'Aguardando início...';
+          break;
+      }
+      if (title) {
+        toast({ title, description, variant: currentExecution.status === 'error' ? 'destructive' : 'default' });
+      }
+      // Invalidate related queries if needed
+      if (currentExecution.status !== 'running') {
+        queryClient.invalidateQueries({ queryKey: queryKeys.executions() });
+      }
+    }
+  }, [currentExecution?.status, projectOptions, agents, tasks, selectedProject, toast, queryClient]);
+  
+  // Update progress based on status
+  useEffect(() => {
+    if (currentExecution) {
+      if (currentExecution.status === 'running') {
+        setProgress(50); // Indeterminate-like
+      } else {
+        setProgress(100);
+      }
+    } else if (!currentExecutionId) {
+      setProgress(0);
+    }
+  }, [currentExecution?.status, currentExecutionId]);
 
   return (
     <div className="space-y-6">
@@ -303,21 +339,31 @@ export default function Run() {
           <Card className="card-notion">
             <CardContent className="p-6">
               {!isRunning ? (
-                <Button onClick={handleRunProject} disabled={!selectedProject} className="w-full btn-primary gap-2 h-12 text-base">
+                <Button onClick={handleRunProject} disabled={!selectedProject || executionQuery.isFetching} className="w-full btn-primary gap-2 h-12 text-base">
                   <Play className="h-5 w-5" /> Executar Projeto
                 </Button>
               ) : (
                 <div className="space-y-4">
-                  <Button onClick={handleStop} variant="destructive" className="w-full gap-2 h-12 text-base">
+                  <Button onClick={handleStop} variant="destructive" className="w-full gap-2 h-12 text-base" disabled={executionQuery.isFetching}>
                     <Square className="h-5 w-5" /> Parar Execução
                   </Button>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Progresso</span>
-                      <span className="text-muted-foreground">{progress}%</span>
+                      <span className="text-muted-foreground">
+                        {currentExecution?.status === 'running' ? 'Em andamento...' : `${progress}%`}
+                      </span>
                     </div>
-                    <Progress value={progress} className="h-2" />
+                    <Progress value={currentExecution?.status === 'running' ? undefined : progress} className="h-2" />
                   </div>
+                  {queryError && (
+                    <Alert className="border-destructive">
+                      <XCircle className="h-4 w-4 text-destructive" />
+                      <AlertDescription className="text-destructive">
+                        Erro de conexão: {queryError.message}. Tentando reconectar...
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -336,38 +382,41 @@ export default function Run() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3 text-sm">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Projeto:</span><span className="font-medium">{currentExecution.project_name || selectedProject}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Projeto:</span><span className="font-medium">{(currentExecution as any).project_name || selectedProject}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Início:</span><span>{new Date(currentExecution.created_at).toLocaleString()}</span></div>
+                    {currentExecution.execution_time && <div className="flex justify-between"><span className="text-muted-foreground">Duração:</span><span>{currentExecution.execution_time}s</span></div>}
                   </div>
                 </CardContent>
               </Card>
-
-              {currentExecution.output_payload && (
+          
+              {currentExecution.output_payload?.result && (
                 <Card className="card-notion">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2"><Zap className="h-5 w-5" /> Resultado</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {currentExecution.output_payload.result && (
-                      <pre className="bg-muted/30 p-4 rounded-radius text-xs overflow-x-auto font-mono whitespace-pre-wrap">
-                        {currentExecution.output_payload.result}
-                      </pre>
-                    )}
+                    <pre className="bg-muted/30 p-4 rounded-radius text-xs overflow-x-auto font-mono whitespace-pre-wrap">
+                      {typeof currentExecution.output_payload.result === 'string'
+                        ? currentExecution.output_payload.result
+                        : JSON.stringify(currentExecution.output_payload.result, null, 2)}
+                    </pre>
                   </CardContent>
                 </Card>
               )}
-
-              {currentExecution.logs && (
+          
+              {currentExecution.logs && currentExecution.logs.trim() && (
                 <Card className="card-notion">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" /> Logs</CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <pre className="bg-muted/30 p-4 rounded-radius text-xs overflow-x-auto font-mono">{currentExecution.logs}</pre>
+                  <CardContent className="max-h-96 overflow-y-auto">
+                    <pre className="bg-muted/30 p-4 rounded-radius text-xs overflow-x-auto font-mono whitespace-pre-wrap">
+                      {currentExecution.logs}
+                    </pre>
                   </CardContent>
                 </Card>
               )}
-
+          
               {currentExecution.error_message && (
                 <Alert className="border-destructive">
                   <XCircle className="h-4 w-4 text-destructive" />
@@ -381,8 +430,8 @@ export default function Run() {
             <Card className="card-notion">
               <CardContent className="p-8 text-center">
                 <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="font-semibold mb-2">Nenhuma execução exibida</h3>
-                <p className="text-muted-foreground text-sm">Selecione um projeto e execute para ver os resultados aqui</p>
+                <h3 className="font-semibold mb-2">Nenhuma execução em andamento</h3>
+                <p className="text-muted-foreground text-sm">Execute um projeto, agente ou task para ver logs e resultados em tempo real</p>
               </CardContent>
             </Card>
           )}

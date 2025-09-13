@@ -1,48 +1,40 @@
-import os
 from typing import Optional
 import stripe
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+import os
 
 from db import models
-from .deps import get_db
+from .deps import get_db, get_stripe_key
 from .routers_auth import get_current_user
+from .schemas import CheckoutSessionRequest
 
 
 router = APIRouter(prefix="/billing", tags=["billing"])
-
-# Initialize Stripe
-stripe_secret_key = os.getenv("STRIPE_SECRET_KEY")
-if stripe_secret_key:
-    stripe.api_key = stripe_secret_key
-else:
-    print("Warning: STRIPE_SECRET_KEY not set. Stripe functionality will not work.")
-
-
-class CreateCheckoutSessionRequest(BaseModel):
-    price_id: str
-    success_url: Optional[str] = None
-    cancel_url: Optional[str] = None
 
 
 class CreateBillingPortalRequest(BaseModel):
     return_url: str
 
 
-@router.post("/create-checkout-session")
+@router.post("/checkout")
 async def create_checkout_session(
-    request: CreateCheckoutSessionRequest,
+    request: CheckoutSessionRequest,
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    stripe_key: str = Depends(get_stripe_key)
 ):
     """Create a Stripe checkout session for subscription"""
+    if not stripe_key:
+        raise HTTPException(status_code=500, detail="Stripe key not configured")
+    stripe.api_key = stripe_key
     try:
         # Get or create Stripe customer
         customer = await get_or_create_stripe_customer(current_user, db)
 
-        success_url = request.success_url or f"{os.getenv('FRONTEND_URL', 'http://localhost:8080')}/app/dashboard?success=true"
-        cancel_url = request.cancel_url or f"{os.getenv('FRONTEND_URL', 'http://localhost:8080')}/pricing?canceled=true"
+        success_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:8080')}/app/dashboard?success=true"
+        cancel_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:8080')}/pricing?canceled=true"
 
         checkout_session = stripe.checkout.Session.create(
             customer=customer.id,
@@ -57,7 +49,7 @@ async def create_checkout_session(
             allow_promotion_codes=True,
         )
 
-        return {"checkout_url": checkout_session.url, "session_id": checkout_session.id}
+        return {"session_id": checkout_session.id}
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

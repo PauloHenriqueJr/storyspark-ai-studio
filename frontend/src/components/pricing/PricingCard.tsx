@@ -2,9 +2,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Check, ArrowRight, Star } from "lucide-react";
-import { Link } from "react-router-dom";
-import { createCheckoutSession } from "@/lib/stripe";
-import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { loadStripe } from "@stripe/stripe-js";
 
 interface PricingCardProps {
   name: string;
@@ -29,19 +28,36 @@ export function PricingCard({
   stripeLink,
   stripePriceId
 }: PricingCardProps) {
-  const [isLoading, setIsLoading] = useState(false);
+  const mutation = useMutation({
+    mutationFn: async (priceId: string) => {
+      const response = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          price_id: priceId,
+        }),
+      });
 
-  const handleSubscribe = async () => {
-    if (stripePriceId) {
-      setIsLoading(true);
-      try {
-        await createCheckoutSession(stripePriceId);
-      } catch (error) {
-        console.error('Failed to start checkout:', error);
-        // You might want to show a toast notification here
-      } finally {
-        setIsLoading(false);
+      if (!response.ok) {
+        throw new Error("Failed to create checkout session");
       }
+
+      return response.json();
+    },
+    onSuccess: async (data) => {
+      const stripe = await loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "");
+      if (stripe && data.session_id) {
+        await stripe.redirectToCheckout({ sessionId: data.session_id });
+      }
+    },
+  });
+
+  const handleSubscribe = () => {
+    if (stripePriceId) {
+      mutation.mutate(stripePriceId);
     } else {
       // Redirect to app for free plan
       window.location.href = '/app/dashboard';
@@ -81,9 +97,9 @@ export function PricingCard({
           className={`w-full ${popular ? '' : 'variant-outline'}`}
           variant={popular ? 'default' : 'outline'}
           onClick={handleSubscribe}
-          disabled={isLoading}
+          disabled={mutation.isPending}
         >
-          {isLoading ? 'Processando...' : cta}
+          {mutation.isPending ? 'Processando...' : cta}
           <ArrowRight className="h-4 w-4 ml-2" />
         </Button>
       </CardContent>

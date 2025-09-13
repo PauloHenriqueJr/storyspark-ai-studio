@@ -135,3 +135,10 @@ class SettingRead(BaseModel):
 
 class SettingUpdate(BaseModel):
     value: str
+
+
+from pydantic import BaseModel
+
+
+class CheckoutSessionRequest(BaseModel):
+    price_id: str

@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -39,6 +40,16 @@ export default function Import() {
   const [isLoading, setIsLoading] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['json', 'n8n', 'yaml', 'zip'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
   const [jsonContent, setJsonContent] = useState('');
   const [yamlContent, setYamlContent] = useState('');
   const [n8nContent, setN8nContent] = useState('');

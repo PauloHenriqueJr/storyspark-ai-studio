@@ -9,6 +9,7 @@ import ReactFlow, {
   Connection,
   Edge,
   BackgroundVariant,
+  Node,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -17,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { apiClient } from '@/lib/api';
+import { apiClient, queryKeys } from '@/lib/api';
 import {
   Play,
   RotateCcw,
@@ -34,8 +35,20 @@ import {
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
 import { useChatDockStore } from '@/lib/store';
-
-// Mock node types for the visual editor
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { Agent } from '@/types/agent';
+import type { Task } from '@/types/task';
+import type { Execution } from '@/types/execution';
+import {
+  createGraphFromProject,
+  applyAutoLayout,
+  validateConnection,
+  GraphNodeType,
+  AgentNodeData,
+  TaskNodeData,
+  GraphEdge
+} from '@/types/graph';
+type GraphNode = Node<AgentNodeData | TaskNodeData>;
 const initialNodes = [
   {
     id: '1',
@@ -164,14 +177,46 @@ export default function VisualEditor() {
   const location = useLocation();
   const { toast } = useToast();
   const { initializeWithPrompt } = useChatDockStore();
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const queryClient = useQueryClient();
+  const [nodes, setNodes, onNodesChange] = useNodesState<GraphNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
   const [selectedNode, setSelectedNode] = useState<any>(null);
-  const [isRunning, setIsRunning] = useState(false);
+  const [currentExecution, setCurrentExecution] = useState<Execution | null>(null);
 
   // Get project ID from URL
   const projectId = new URLSearchParams(location.search).get('projectId');
+
+  if (!projectId) {
+    return (
+      <div className="p-8 text-center">
+        <h2 className="text-lg font-semibold mb-4">Editor Visual</h2>
+        <p className="text-muted-foreground">Selecione um projeto da lista para editar visualmente.</p>
+      </div>
+    );
+  }
+
+  const { data: project } = useQuery({
+    queryKey: queryKeys.project(projectId),
+    queryFn: () => apiClient.getProject(projectId),
+    enabled: !!projectId,
+  });
+
+  const { data: agentsData } = useQuery({
+    queryKey: queryKeys.agents(projectId),
+    queryFn: () => apiClient.getProjectAgents(projectId),
+    enabled: !!projectId,
+  });
+
+  const agents: Agent[] = agentsData || [];
+
+  const { data: tasksData } = useQuery({
+    queryKey: queryKeys.tasks(projectId),
+    queryFn: () => apiClient.getProjectTasks(projectId),
+    enabled: !!projectId,
+  });
+
+  const tasks: Task[] = (tasksData as Task[]) || [];
 
   // Check if we received a prompt from Dashboard and auto-start AI Builder
   useEffect(() => {
@@ -183,6 +228,108 @@ export default function VisualEditor() {
     }
   }, [location.state, initializeWithPrompt]);
 
+  useEffect(() => {
+    if (project && agents.length > 0 && tasks.length >= 0) {
+      const { nodes: newNodes, edges: newEdges } = createGraphFromProject(agents, tasks);
+      setNodes(newNodes);
+      setEdges(newEdges.map((e: GraphEdge) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        type: 'smoothstep' as const,
+        animated: false,
+        style: { stroke: 'hsl(var(--primary))' },
+      } as Edge)));
+    }
+  }, [project, agents, tasks]);
+
+  const runMutation = useMutation({
+    mutationFn: (inputs: Record<string, any>) => apiClient.run.project(Number(projectId), { inputs, language: 'pt-br' }),
+    onSuccess: (data: Execution) => {
+      setCurrentExecution(data);
+      toast({
+        title: "Workflow Executado",
+        description: `Execução iniciada com ID: ${data.id}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: "Falha ao executar workflow",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const exportMutation = useMutation({
+    mutationFn: () => apiClient.exportProject(projectId),
+    onSuccess: (blob: Blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `project_${projectId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({
+        title: "Exportado",
+        description: "Projeto exportado como ZIP",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro no Export",
+        description: "Falha ao exportar",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const executionQuery = useQuery({
+    queryKey: queryKeys.execution(currentExecution?.id || ''),
+    queryFn: () => apiClient.getExecution(currentExecution!.id),
+    enabled: !!currentExecution && !!currentExecution.id && currentExecution.status === 'running',
+    refetchInterval: 1000,
+    onSuccess: (data: Execution) => {
+      setCurrentExecution(data);
+      if (data.status !== 'running') {
+        setNodes((nds) =>
+          nds.map((node: GraphNode) => ({
+            ...node,
+            data: {
+              ...node.data,
+              isRunning: false,
+              status: data.status,
+            },
+          }))
+        );
+        toast({
+          title: data.status === 'completed' ? "Concluído" : "Falha",
+          description: data.output_payload?.result || data.logs || data.error_message,
+        });
+      } else {
+        setNodes((nds) =>
+          nds.map((node: GraphNode) => ({
+            ...node,
+            data: {
+              ...node.data,
+              isRunning: true,
+              status: 'running',
+            },
+          }))
+        );
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro na execução",
+        description: error.message || "Falha ao buscar status",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onConnect = useCallback(
     (params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)),
     [setEdges],
@@ -193,7 +340,7 @@ export default function VisualEditor() {
     setIsInspectorOpen(true);
   }, []);
 
-  const handleRunWorkflow = async () => {
+  const handleRunWorkflow = () => {
     if (!projectId) {
       toast({
         title: "Erro",
@@ -203,35 +350,41 @@ export default function VisualEditor() {
       return;
     }
 
-    setIsRunning(true);
-    try {
-      const execution = await apiClient.executeProject(projectId, {
-        inputs: {},
-        language: 'pt-br'
-      });
-
-      toast({
-        title: "Workflow Executado",
-        description: `Execução iniciada com ID: ${(execution as any).id}`,
-      });
-    } catch (error) {
-      console.error('Error running workflow:', error);
-      toast({
-        title: "Erro",
-        description: "Falha ao executar workflow",
-        variant: "destructive",
-      });
-    } finally {
-      setIsRunning(false);
-    }
+    const inputs = {}; // TODO: collect inputs from UI if available
+    runMutation.mutate(inputs);
   };
 
   const handleValidate = () => {
-    // Basic validation - check if there are nodes and edges
-    const hasNodes = nodes.length > 0;
-    const hasEdges = edges.length > 0;
+    if (nodes.length === 0) {
+      toast({
+        title: "Workflow Inválido",
+        description: "Adicione pelo menos um agente ou task",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    if (hasNodes && hasEdges) {
+    let isValid = true;
+    const errors: string[] = [];
+
+    edges.forEach((edge) => {
+      const sourceNode = nodes.find((n) => n.id === edge.source);
+      const targetNode = nodes.find((n) => n.id === edge.target);
+      if (sourceNode && targetNode) {
+        const sourceType: GraphNodeType = 'agent' in sourceNode.data ? 'agent' : 'task';
+        const targetType: GraphNodeType = 'agent' in targetNode.data ? 'agent' : 'task';
+        const validation = validateConnection(sourceType, targetType, sourceNode.data, targetNode.data);
+        if (!validation.isValid && validation.reason) {
+          isValid = false;
+          errors.push(validation.reason);
+        }
+      } else {
+        isValid = false;
+        errors.push('Conexão inválida');
+      }
+    });
+
+    if (isValid) {
       toast({
         title: "Workflow Válido",
         description: "O workflow está configurado corretamente",
@@ -239,21 +392,14 @@ export default function VisualEditor() {
     } else {
       toast({
         title: "Workflow Inválido",
-        description: "Adicione agentes e conexões ao workflow",
+        description: errors.length > 0 ? errors[0] : "Verifique as conexões",
         variant: "destructive",
       });
     }
   };
 
   const handleAutoLayout = () => {
-    // Simple auto-layout - arrange nodes in a grid
-    const updatedNodes = nodes.map((node, index) => ({
-      ...node,
-      position: {
-        x: (index % 3) * 300 + 100,
-        y: Math.floor(index / 3) * 200 + 100,
-      },
-    }));
+    const updatedNodes = applyAutoLayout(nodes as GraphNode[], edges);
     setNodes(updatedNodes);
 
     toast({
@@ -263,10 +409,21 @@ export default function VisualEditor() {
   };
 
   const handleExportPNG = () => {
-    // For now, just show a message - full PNG export would require additional libraries
+    if (!projectId) {
+      toast({
+        title: "Erro",
+        description: "ID do projeto não encontrado",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    exportMutation.mutate();
+
     toast({
-      title: "Export PNG",
-      description: "Funcionalidade de export PNG será implementada em breve",
+      title: "PNG",
+      description: "Para PNG, use captura de tela do browser. ZIP foi exportado.",
+      variant: "default",
     });
   };
 
@@ -276,10 +433,11 @@ export default function VisualEditor() {
       <div className="flex-1 relative">
         {/* Toolbar */}
         <div className="absolute top-4 left-4 z-10 bg-surface border border-border rounded-radius-lg shadow-lg p-2 flex gap-2">
-          <Button onClick={handleRunWorkflow} className="btn-primary gap-2" size="sm" disabled={isRunning}>
+          <Button onClick={handleRunWorkflow} className="btn-primary gap-2" size="sm" disabled={runMutation.isPending || !projectId}>
             <Play className="h-4 w-4" />
-            {isRunning ? 'Executando...' : 'Run'}
+            {runMutation.isPending ? 'Executando...' : 'Run'}
           </Button>
+          {runMutation.isPending && <div className="text-xs text-muted-foreground mt-1">Carregando execução...</div>}
           <Button onClick={handleValidate} variant="outline" size="sm">
             Validate
           </Button>
@@ -297,8 +455,9 @@ export default function VisualEditor() {
             <Maximize className="h-4 w-4" />
           </Button>
           <Separator orientation="vertical" className="h-6" />
-          <Button onClick={handleExportPNG} variant="ghost" size="sm">
+          <Button onClick={handleExportPNG} variant="ghost" size="sm" disabled={exportMutation.isPending || !projectId}>
             <Download className="h-4 w-4" />
+            {exportMutation.isPending && <span className="ml-2">Exportando...</span>}
           </Button>
         </div>
 

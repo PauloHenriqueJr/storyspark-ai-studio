@@ -307,380 +307,390 @@ export default function Tasks() {
   ];
 
   return (
-    <>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-title flex items-center gap-3">
-              <CheckSquare className="h-7 w-7 text-primary" />
-              Tasks
-            </h1>
-            <p className="text-muted-foreground">Gerencie e configure as tarefas dos seus agentes criativos</p>
-          </div>
+    <div className="space-y-6">
+      {/* New Task Modal */}
+      <NewTaskModal
+        open={isCreateDialogOpen}
+        onOpenChange={setIsCreateDialogOpen}
+        projectId={selectedProjectId}
+      />
 
-          <NewTaskModal
-            open={isCreateDialogOpen}
-            onOpenChange={setIsCreateDialogOpen}
-            projectId={selectedProjectId}
-          />
+      <EditTaskModal
+        open={isEditMode}
+        onOpenChange={(open) => {
+          setIsEditMode(open);
+          if (!open) {
+            setEditingTask(null);
+          }
+        }}
+        task={editingTask}
+        projectId={selectedProjectId}
+      />
 
-          <EditTaskModal
-            open={isEditMode}
-            onOpenChange={(open) => {
-              setIsEditMode(open);
-              if (!open) {
-                setEditingTask(null);
-              }
-            }}
-            task={editingTask}
-            projectId={selectedProjectId}
-          />
-
-        </div>
-
-        {/* Modern Project Selector */}
-        {Array.isArray(projects) && projects.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 pointer-events-none">
-              <FolderOpen className="h-4 w-4 text-primary" />
-              <Label className="text-sm font-medium text-foreground/80">Selecionar Projeto</Label>
-            </div>
-
-            {(projects as any[]).length <= 6 ? (
-              // Layout horizontal para poucos projetos
-              <div className="flex gap-3 overflow-x-auto pb-2 px-1 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
-                {(projects as any[]).map((project: any) => (
-                  <button
-                    key={project.id}
-                    onClick={() => setSelectedProjectId(String(project.id))}
-                    className={`flex-shrink-0 px-4 py-3 rounded-xl border-2 transition-all duration-200 hover:shadow-lg hover:shadow-primary/10 ${selectedProjectId === String(project.id)
-                      ? 'border-primary bg-primary/5 shadow-md shadow-primary/20'
-                      : 'border-border hover:border-primary/50 bg-card hover:bg-primary/5'
-                      }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-3 h-3 rounded-full transition-all duration-200 ${selectedProjectId === String(project.id)
-                        ? 'bg-primary animate-pulse'
-                        : 'bg-muted-foreground/50 hover:bg-primary/70'
-                        }`} />
-                      <div className="text-left">
-                        <div className={`text-sm font-medium transition-colors duration-200 ${selectedProjectId === String(project.id)
-                          ? 'text-primary'
-                          : 'text-foreground hover:text-primary'
-                          }`}>
-                          {project.name}
-                        </div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-2">
-                          <CheckSquare className="h-3 w-3" />
-                          {project.tasks_count || 0} tasks
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              // Dropdown moderno para muitos projetos
-              <div className="relative">
-                <button
-                  onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
-                  className="w-full px-4 py-3 bg-card border-2 border-border rounded-xl hover:border-primary/50 transition-all duration-200 flex items-center justify-between group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-lg">
-                      <FolderOpen className="h-4 w-4 text-primary" />
-                    </div>
-                    <div className="text-left">
-                      <div className="text-sm font-medium text-foreground">
-                        {(projects as any[]).find((p: any) => String(p.id) === selectedProjectId)?.name || 'Selecionar projeto'}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {(projects as any[]).find((p: any) => String(p.id) === selectedProjectId)?.tasks_count || 0} tasks
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${isProjectDropdownOpen ? 'rotate-180' : ''
-                    }`} />
-                </button>
-
-                {isProjectDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-lg z-50 max-h-64 overflow-y-auto">
-                    {(projects as any[]).map((project: any) => (
-                      <button
-                        key={project.id}
-                        onClick={() => {
-                          setSelectedProjectId(String(project.id));
-                          setIsProjectDropdownOpen(false);
-                        }}
-                        className={`w-full px-4 py-3 text-left hover:bg-primary/5 transition-colors duration-150 first:rounded-t-xl last:rounded-b-xl ${selectedProjectId === String(project.id) ? 'bg-primary/5 border-l-4 border-primary' : ''
-                          }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-3 h-3 rounded-full ${selectedProjectId === String(project.id)
-                            ? 'bg-primary animate-pulse'
-                            : 'bg-muted-foreground/50'
-                            }`} />
-                          <div>
-                            <div className={`text-sm font-medium ${selectedProjectId === String(project.id) ? 'text-primary' : 'text-foreground'
-                              }`}>
-                              {project.name}
-                            </div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-2">
-                              <CheckSquare className="h-3 w-3" />
-                              {project.tasks_count || 0} tasks • {project.agents_count || 0} agentes
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Search and Filters */}
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar tasks..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 input-notion"
-            />
-          </div>
-          <Button variant="outline" className="gap-2">
-            <Filter className="h-4 w-4" />
-            Filtros
-          </Button>
-        </div>
-
-        {/* Tasks Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTasks.map((task: any) => {
-            const project = (projects as any[]).find(p => p.id === task.project_id);
-            const agent = (allAgents as any[]).find(a => a.id === task.agent_id);
-
-            return (
-              <Card key={task.id} className="group relative overflow-hidden border-0 bg-gradient-to-br from-card via-card to-card/50 hover:from-card hover:to-primary/5 transition-all duration-300 hover:shadow-xl hover:shadow-primary/10 hover:-translate-y-1">
-                {/* Decorative gradient border */}
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-transparent to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg" />
-
-                <CardHeader className="pb-4 relative">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 space-y-2">
-                      <CardTitle className="text-lg flex items-center gap-3">
-                        <div className="p-2 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors duration-300">
-                          <Target className="h-5 w-5 text-primary" />
-                        </div>
-                        <span className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text group-hover:from-primary group-hover:to-primary/80 transition-all duration-300">
-                          Task #{task.id}
-                        </span>
-                      </CardTitle>
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <User className="h-3 w-3" />
-                          <span>{agent?.name}</span>
-                        </div>
-                        <div className="w-1 h-1 bg-muted-foreground/50 rounded-full"></div>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <FolderOpen className="h-3 w-3" />
-                          <span>{project?.name}</span>
-                        </div>
-                        {recentlyDuplicated.has(task.id) && (
-                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 animate-pulse">
-                            <Copy className="h-3 w-3 mr-1" />
-                            Duplicada
-                          </Badge>
-                        )}
-                      </div>
-                      <CardDescription className="text-sm leading-relaxed group-hover:text-foreground/80 transition-colors">
-                        {task.description}
-                      </CardDescription>
-                    </div>
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-primary/10 hover:text-primary"
-                        >
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem onClick={() => handleTaskAction('run', task.id)} className="gap-2">
-                          <Play className="h-4 w-4 text-green-600" />
-                          <span>Executar</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleTaskAction('edit', task.id)} className="gap-2">
-                          <Edit className="h-4 w-4 text-blue-600" />
-                          <span>Editar</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleTaskAction('duplicate', task.id)} className="gap-2">
-                          <Copy className="h-4 w-4 text-purple-600" />
-                          <span>Duplicar</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => handleTaskAction('delete', task.id, task)}
-                          className="gap-2 text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          <span>Remover</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-4">
-                  {/* Expected Output */}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-primary/10 rounded-md">
-                        <FileText className="h-4 w-4 text-primary" />
-                      </div>
-                      <h4 className="font-semibold text-sm text-foreground/80">Resultado Esperado</h4>
-                    </div>
-                    <p className="text-sm text-muted-foreground leading-relaxed pl-7 line-clamp-2 group-hover:text-foreground/80 transition-colors">
-                      {task.expected_output}
-                    </p>
-                  </div>
-
-                  {/* Tools and Settings */}
-                  <div className="space-y-3">
-                    {task.tools && task.tools.length > 0 && (
-                      <div className="flex items-center gap-2 px-3 py-2 bg-primary/10 rounded-lg">
-                        <Settings className="h-4 w-4 text-primary" />
-                        <div>
-                          <div className="text-sm font-semibold text-primary">{task.tools.length}</div>
-                          <div className="text-xs text-primary/80">ferramentas</div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-full">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">
-                          {task.async_execution ? 'Assíncrono' : 'Síncrono'}
-                        </span>
-                      </div>
-                      {task.output_file && (
-                        <Badge variant="secondary" className="gap-1.5 bg-gradient-to-r from-primary/10 to-primary/5 hover:from-primary/20 hover:to-primary/10 transition-all duration-200">
-                          <FileText className="h-3 w-3" />
-                          {task.output_file}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Action buttons */}
-                  <div className="flex gap-2 pt-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1 gap-1.5 hover:bg-primary hover:text-primary-foreground transition-all duration-200"
-                      onClick={() => handleTaskAction('run', task.id)}
-                      disabled={executingTasks.has(task.id)}
-                    >
-                      {executingTasks.has(task.id) ? (
-                        <>
-                          <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                          Executando...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="h-3 w-3" />
-                          Executar
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1 gap-1.5 hover:bg-blue-500 hover:text-white transition-all duration-200"
-                      onClick={() => handleTaskAction('edit', task.id)}
-                    >
-                      <Edit className="h-3 w-3" />
-                      Editar
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        {/* Empty State */}
-        {filteredTasks.length === 0 && !tasksLoading && (
-          <div className="text-center py-12">
-            <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-foreground mb-2">Nenhuma task encontrada</h3>
-            <p className="text-muted-foreground mb-4">
-              {searchTerm ? 'Tente ajustar os filtros de busca' : 'Crie sua primeira task para começar'}
-            </p>
-            {!searchTerm && (
-              <Button onClick={() => setIsCreateDialogOpen(true)} className="btn-primary gap-2">
-                <Plus className="h-4 w-4" />
-                Criar Primeira Task
-              </Button>
-            )}
-          </div>
-        )}
-
-        {/* Stats Footer */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-6 border-t">
-          <div className="text-center">
-            <div className="text-2xl font-semibold text-heading">{(allTasks as any[]).length}</div>
-            <div className="text-sm text-muted-foreground">Total de Tasks</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-semibold text-heading">
-              {(allTasks as any[]).filter(t => (allAgents as any[]).find(a => a.id === t.agent_id)).length}
-            </div>
-            <div className="text-sm text-muted-foreground">Com Agente</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-semibold text-heading">
-              {(allTasks as any[]).filter(t => t.async_execution).length}
-            </div>
-            <div className="text-sm text-muted-foreground">Assíncronas</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-semibold text-heading">
-              {(allTasks as any[]).filter(t => t.tools && t.tools.length > 0).length}
-            </div>
-            <div className="text-sm text-muted-foreground">Com Ferramentas</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir Task?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação não pode ser desfeita. A task "{deleteTarget?.description?.substring(0, 50)}..." será removida permanentemente.
+              Essa ação é irreversível. Tem certeza que deseja excluir a task "{deleteTarget?.description}"?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDeleteTarget(null)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={confirmDelete}
-            >
-              Excluir
-            </AlertDialogAction>
+            <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={confirmDelete}>Excluir</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+
+      {/* Header */}
+      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 p-8 border border-primary/10">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-pulse" />
+        <div className="relative flex items-center justify-between">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold flex items-center gap-4">
+              <div className="p-3 bg-primary/10 rounded-xl">
+                <CheckSquare className="h-8 w-8 text-primary" />
+              </div>
+              <span className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+                Tasks
+              </span>
+            </h1>
+            <p className="text-muted-foreground text-lg">
+              Gerencie as tarefas dos seus agentes criativos • {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''} encontrado{filteredTasks.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+
+          <Button
+            onClick={() => setIsCreateDialogOpen(true)}
+            disabled={!selectedProjectId}
+            className="btn-primary gap-3 px-6 py-3 text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group"
+          >
+            <Plus className="h-5 w-5 group-hover:rotate-90 transition-transform duration-300" />
+            Nova Task
+          </Button>
+        </div>
+      </div>
+
+      {/* Modern Project Selector */}
+      {Array.isArray(projects) && projects.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 pointer-events-none">
+            <FolderOpen className="h-4 w-4 text-primary" />
+            <Label className="text-sm font-medium text-foreground/80">Selecionar Projeto</Label>
+          </div>
+
+          {(projects as any[]).length <= 6 ? (
+            // Layout horizontal para poucos projetos
+            <div className="flex gap-3 overflow-x-auto pb-2 px-1 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
+              {(projects as any[]).map((project: any) => (
+                <button
+                  key={project.id}
+                  onClick={() => setSelectedProjectId(String(project.id))}
+                  className={`flex-shrink-0 px-4 py-3 rounded-xl border-2 transition-all duration-200 hover:shadow-lg hover:shadow-primary/10 ${selectedProjectId === String(project.id)
+                    ? 'border-primary bg-primary/5 shadow-md shadow-primary/20'
+                    : 'border-border hover:border-primary/50 bg-card hover:bg-primary/5'
+                    }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-3 h-3 rounded-full transition-all duration-200 ${selectedProjectId === String(project.id)
+                      ? 'bg-primary animate-pulse'
+                      : 'bg-muted-foreground/50 hover:bg-primary/70'
+                      }`} />
+                    <div className="text-left">
+                      <div className={`text-sm font-medium transition-colors duration-200 ${selectedProjectId === String(project.id)
+                        ? 'text-primary'
+                        : 'text-foreground hover:text-primary'
+                        }`}>
+                        {project.name}
+                      </div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-2">
+                        <CheckSquare className="h-3 w-3" />
+                        {project.tasks_count || 0} tasks
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            // Dropdown moderno para muitos projetos
+            <div className="relative">
+              <button
+                onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
+                className="w-full px-4 py-3 bg-card border-2 border-border rounded-xl hover:border-primary/50 transition-all duration-200 flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <FolderOpen className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="text-left">
+                    <div className="text-sm font-medium text-foreground">
+                      {(projects as any[]).find((p: any) => String(p.id) === selectedProjectId)?.name || 'Selecionar projeto'}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {(projects as any[]).find((p: any) => String(p.id) === selectedProjectId)?.tasks_count || 0} tasks
+                    </div>
+                  </div>
+                </div>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${isProjectDropdownOpen ? 'rotate-180' : ''
+                  }`} />
+              </button>
+
+              {isProjectDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-lg z-50 max-h-64 overflow-y-auto">
+                  {(projects as any[]).map((project: any) => (
+                    <button
+                      key={project.id}
+                      onClick={() => {
+                        setSelectedProjectId(String(project.id));
+                        setIsProjectDropdownOpen(false);
+                      }}
+                      className={`w-full px-4 py-3 text-left hover:bg-primary/5 transition-colors duration-150 first:rounded-t-xl last:rounded-b-xl ${selectedProjectId === String(project.id) ? 'bg-primary/5 border-l-4 border-primary' : ''
+                        }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-3 h-3 rounded-full ${selectedProjectId === String(project.id)
+                          ? 'bg-primary animate-pulse'
+                          : 'bg-muted-foreground/50'
+                          }`} />
+                        <div>
+                          <div className={`text-sm font-medium ${selectedProjectId === String(project.id) ? 'text-primary' : 'text-foreground'
+                            }`}>
+                            {project.name}
+                          </div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-2">
+                            <CheckSquare className="h-3 w-3" />
+                            {project.tasks_count || 0} tasks • {project.agents_count || 0} agentes
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Search and Filters */}
+      <div className="flex items-center gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar tasks..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 input-notion"
+          />
+        </div>
+        <Button variant="outline" className="gap-2">
+          <Filter className="h-4 w-4" />
+          Filtros
+        </Button>
+      </div>
+
+      {/* Tasks Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredTasks.map((task: any) => {
+          const project = (projects as any[]).find(p => p.id === task.project_id);
+          const agent = (allAgents as any[]).find(a => a.id === task.agent_id);
+
+          return (
+            <Card key={task.id} className="group relative overflow-hidden border-0 bg-gradient-to-br from-card via-card to-card/50 hover:from-card hover:to-primary/5 transition-all duration-300 hover:shadow-xl hover:shadow-primary/10 hover:-translate-y-1">
+              {/* Decorative gradient border */}
+              <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-transparent to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg" />
+
+              <CardHeader className="pb-4 relative">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 space-y-2">
+                    <CardTitle className="text-lg flex items-center gap-3">
+                      <div className="p-2 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors duration-300">
+                        <Target className="h-5 w-5 text-primary" />
+                      </div>
+                      <span className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text group-hover:from-primary group-hover:to-primary/80 transition-all duration-300">
+                        Task #{task.id}
+                      </span>
+                    </CardTitle>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <User className="h-3 w-3" />
+                        <span>{agent?.name}</span>
+                      </div>
+                      <div className="w-1 h-1 bg-muted-foreground/50 rounded-full"></div>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <FolderOpen className="h-3 w-3" />
+                        <span>{project?.name}</span>
+                      </div>
+                      {recentlyDuplicated.has(task.id) && (
+                        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 animate-pulse">
+                          <Copy className="h-3 w-3 mr-1" />
+                          Duplicada
+                        </Badge>
+                      )}
+                    </div>
+                    <CardDescription className="text-sm leading-relaxed group-hover:text-foreground/80 transition-colors">
+                      {task.description}
+                    </CardDescription>
+                  </div>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-primary/10 hover:text-primary"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem onClick={() => handleTaskAction('run', task.id)} className="gap-2">
+                        <Play className="h-4 w-4 text-green-600" />
+                        <span>Executar</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleTaskAction('edit', task.id)} className="gap-2">
+                        <Edit className="h-4 w-4 text-blue-600" />
+                        <span>Editar</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleTaskAction('duplicate', task.id)} className="gap-2">
+                        <Copy className="h-4 w-4 text-purple-600" />
+                        <span>Duplicar</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => handleTaskAction('delete', task.id, task)}
+                        className="gap-2 text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span>Remover</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+                {/* Expected Output */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-primary/10 rounded-md">
+                      <FileText className="h-4 w-4 text-primary" />
+                    </div>
+                    <h4 className="font-semibold text-sm text-foreground/80">Resultado Esperado</h4>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed pl-7 line-clamp-2 group-hover:text-foreground/80 transition-colors">
+                    {task.expected_output}
+                  </p>
+                </div>
+
+                {/* Tools and Settings */}
+                <div className="space-y-3">
+                  {task.tools && task.tools.length > 0 && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-primary/10 rounded-lg">
+                      <Settings className="h-4 w-4 text-primary" />
+                      <div>
+                        <div className="text-sm font-semibold text-primary">{task.tools.length}</div>
+                        <div className="text-xs text-primary/80">ferramentas</div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-full">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">
+                        {task.async_execution ? 'Assíncrono' : 'Síncrono'}
+                      </span>
+                    </div>
+                    {task.output_file && (
+                      <Badge variant="secondary" className="gap-1.5 bg-gradient-to-r from-primary/10 to-primary/5 hover:from-primary/20 hover:to-primary/10 transition-all duration-200">
+                        <FileText className="h-3 w-3" />
+                        {task.output_file}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2 pt-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 gap-1.5 hover:bg-primary hover:text-primary-foreground transition-all duration-200"
+                    onClick={() => handleTaskAction('run', task.id)}
+                    disabled={executingTasks.has(task.id)}
+                  >
+                    {executingTasks.has(task.id) ? (
+                      <>
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                        Executando...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-3 w-3" />
+                        Executar
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 gap-1.5 hover:bg-blue-500 hover:text-white transition-all duration-200"
+                    onClick={() => handleTaskAction('edit', task.id)}
+                  >
+                    <Edit className="h-3 w-3" />
+                    Editar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Empty State */}
+      {filteredTasks.length === 0 && !tasksLoading && (
+        <div className="text-center py-12">
+          <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-foreground mb-2">Nenhuma task encontrada</h3>
+          <p className="text-muted-foreground mb-4">
+            {searchTerm ? 'Tente ajustar os filtros de busca' : 'Crie sua primeira task para começar'}
+          </p>
+          {!searchTerm && (
+            <Button onClick={() => setIsCreateDialogOpen(true)} className="btn-primary gap-2">
+              <Plus className="h-4 w-4" />
+              Criar Primeira Task
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Stats Footer */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-6 border-t">
+        <div className="text-center">
+          <div className="text-2xl font-semibold text-heading">{(allTasks as any[]).length}</div>
+          <div className="text-sm text-muted-foreground">Total de Tasks</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-semibold text-heading">
+            {(allTasks as any[]).filter(t => (allAgents as any[]).find(a => a.id === t.agent_id)).length}
+          </div>
+          <div className="text-sm text-muted-foreground">Com Agente</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-semibold text-heading">
+            {(allTasks as any[]).filter(t => t.async_execution).length}
+          </div>
+          <div className="text-sm text-muted-foreground">Assíncronas</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-semibold text-heading">
+            {(allTasks as any[]).filter(t => t.tools && t.tools.length > 0).length}
+          </div>
+          <div className="text-sm text-muted-foreground">Com Ferramentas</div>
+        </div>
+      </div>
+    </div>
   );
 }

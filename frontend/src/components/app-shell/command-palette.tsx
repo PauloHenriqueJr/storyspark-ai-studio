@@ -154,8 +154,8 @@ export function CommandPalette() {
       subtitle: 'Create a new AI project',
       icon: Plus,
       action: () => {
-        navigateToRoute('/app/projects');
-        // TODO: Trigger new project modal
+        navigateToRoute('/app/projects?create=true');
+        // Trigger new project modal via query param
       },
       keywords: ['create', 'add'],
     },
@@ -165,8 +165,8 @@ export function CommandPalette() {
       subtitle: 'Create a new AI agent',
       icon: Users,
       action: () => {
-        navigateToRoute('/app/agents');
-        // TODO: Trigger new agent modal
+        navigateToRoute('/app/agents?create=true');
+        // Trigger new agent modal via query param
       },
       keywords: ['create', 'add'],
     },
@@ -176,8 +176,8 @@ export function CommandPalette() {
       subtitle: 'Create a new task',
       icon: CheckSquare,
       action: () => {
-        navigateToRoute('/app/tasks');
-        // TODO: Trigger new task modal
+        navigateToRoute('/app/tasks?create=true');
+        // Trigger new task modal via query param
       },
       keywords: ['create', 'add'],
     },
@@ -189,8 +189,7 @@ export function CommandPalette() {
       subtitle: 'Convert n8n workflow to CrewAI',
       icon: Zap,
       action: () => {
-        navigateToRoute('/app/import');
-        // TODO: Focus on n8n import section
+        navigateToRoute('/app/import?tab=n8n');
       },
       keywords: ['n8n', 'workflow', 'convert'],
     },
@@ -200,8 +199,7 @@ export function CommandPalette() {
       subtitle: 'Import agents or tasks from YAML',
       icon: FileText,
       action: () => {
-        navigateToRoute('/app/import');
-        // TODO: Focus on YAML import section
+        navigateToRoute('/app/import?tab=yaml');
       },
       keywords: ['yaml', 'agents', 'tasks'],
     },
