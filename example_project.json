@@ -1,0 +1,6 @@
+{
+    "name": "Social Media Management Automation",
+    "description": "Automação completa de gerenciamento de redes sociais",
+    "model_provider": "openrouter",
+    "model_name": "openrouter/gpt-4o-mini"
+}

@@ -1,0 +1,32 @@
+{
+  "name": "n8n Demo Workflow",
+  "nodes": [
+    {
+      "id": "1",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.openai.com/v1/models"
+      }
+    },
+    {
+      "id": "2",
+      "name": "AI Assistant",
+      "type": "n8n-nodes-base.chatOpenAi",
+      "parameters": {
+        "model": "gpt-4o-mini"
+      }
+    }
+  ],
+  "connections": {
+    "HTTP Request": {
+      "main": [
+        [
+          { "node": "AI Assistant", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  }
+}
+

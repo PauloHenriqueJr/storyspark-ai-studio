@@ -1,0 +1,190 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* StorySpark AI Studio Design System - Notion inspired with vibrant orange theme
+   Colors MUST be HSL. Typography: Inter + JetBrains Mono
+*/
+
+@layer base {
+  :root {
+    /* Notion-inspired neutral palette */
+    --background: 42 10% 97%; /* #F7F7F5 */
+    --surface: 0 0% 100%; /* #FFFFFF */
+    --foreground: 0 0% 6%; /* #0F0F0F */
+    --heading: 0 0% 12%; /* #1F1F1F */
+    
+    /* Card and surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 6%;
+    
+    /* Interactive elements - Orange theme */
+    --primary: 22 96% 58%; /* #FF6B35 - Vibrant orange */
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 22 96% 52%;
+    
+    --secondary: 42 10% 95%;
+    --secondary-foreground: 0 0% 12%;
+    --secondary-hover: 42 10% 92%;
+    
+    /* Accent colors - Orange complementary palette */
+    --accent-purple: 251 55% 58%; /* #6E56CF - Purple complement */
+    --accent-green: 161 64% 42%; /* #2BAA76 - Green accent */
+    --accent-orange: 32 96% 48%; /* #E55D00 - Deep orange */
+    --accent-coral: 14 100% 70%; /* #FF7A59 - Light coral */
+    
+    /* Neutral grays */
+    --muted: 42 10% 95%;
+    --muted-foreground: 42 8% 46%;
+    --muted-hover: 42 10% 92%;
+    
+    /* Borders and inputs */
+    --border: 42 10% 90%; /* #E6E6E4 */
+    --border-hover: 42 10% 85%;
+    --input: 42 10% 95%;
+    --input-border: 42 10% 90%;
+    --ring: 22 96% 58%;
+    
+    /* States */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --warning: 41 96% 55%;
+    --success: 161 64% 42%;
+    
+    /* Layout */
+    --sidebar-width: 240px;
+    --sidebar-collapsed: 60px;
+    --topbar-height: 64px;
+    --radius: 6px;
+    --radius-sm: 4px;
+    --radius-lg: 8px;
+
+    /* Sidebar specific */
+    --sidebar-background: 42 10% 97%;
+    --sidebar-foreground: 0 0% 12%;
+    --sidebar-border: 42 10% 90%;
+    --sidebar-active: 0 0% 100%;
+    --sidebar-active-foreground: 22 96% 58%;
+  }
+
+  .dark {
+    /* Dark mode - Notion inspired */
+    --background: 0 0% 9%; /* #171717 */
+    --surface: 0 0% 12%; /* #1F1F1F */
+    --foreground: 0 0% 95%; /* #F2F2F2 */
+    --heading: 0 0% 98%; /* #FAFAFA */
+    
+    --card: 0 0% 12%;
+    --card-foreground: 0 0% 95%;
+    
+    --primary: 22 96% 63%;
+    --primary-foreground: 0 0% 9%;
+    --primary-hover: 22 96% 58%;
+    
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 0 0% 95%;
+    --secondary-hover: 0 0% 20%;
+    
+    --muted: 0 0% 16%;
+    --muted-foreground: 0 0% 65%;
+    --muted-hover: 0 0% 20%;
+    
+    --border: 0 0% 20%;
+    --border-hover: 0 0% 25%;
+    --input: 0 0% 16%;
+    --input-border: 0 0% 20%;
+    --ring: 22 96% 63%;
+    
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --sidebar-background: 0 0% 9%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-active: 0 0% 16%;
+    --sidebar-active-foreground: 22 96% 63%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-inter antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    font-variation-settings: 'opsz' 32;
+  }
+  
+  /* Dark mode as default */
+  html {
+    color-scheme: dark;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-heading font-medium tracking-tight;
+  }
+  
+  code, pre {
+    @apply font-mono;
+  }
+}
+
+@layer components {
+  /* Notion-inspired button variants */
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary-hover;
+    @apply rounded-radius px-3 py-2 text-sm font-medium;
+    @apply transition-colors duration-150;
+  }
+  
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary-hover;
+    @apply border border-border rounded-radius px-3 py-2 text-sm font-medium;
+    @apply transition-colors duration-150;
+  }
+  
+  .btn-ghost {
+    @apply text-foreground hover:bg-muted-hover;
+    @apply rounded-radius px-3 py-2 text-sm font-medium;
+    @apply transition-colors duration-150;
+  }
+  
+  /* Card with Notion aesthetics */
+  .card-notion {
+    @apply bg-card border border-border rounded-radius-lg;
+    @apply shadow-sm hover:shadow-md transition-shadow duration-200;
+  }
+  
+  /* Input with Notion styling */
+  .input-notion {
+    @apply bg-input border border-border rounded-radius;
+    @apply px-3 py-2 text-sm placeholder:text-muted-foreground;
+    @apply focus:outline-none focus:ring-2 focus:ring-ring;
+    @apply transition-all duration-150;
+  }
+  
+  /* Typography scale */
+  .text-hero {
+    @apply text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight;
+  }
+  
+  .text-title {
+    @apply text-2xl sm:text-3xl font-semibold tracking-tight;
+  }
+  
+  .text-subtitle {
+    @apply text-lg font-medium text-muted-foreground;
+  }
+  
+  .text-body {
+    @apply text-base leading-relaxed;
+  }
+  
+  .text-caption {
+    @apply text-sm text-muted-foreground;
+  }
+}
