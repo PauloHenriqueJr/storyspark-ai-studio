@@ -1,7 +1,7 @@
 ---
 description: 'Beast Mode: Crie agentes personalizados e delegue tarefas complexas para eles. Ideal para projetos que exigem múltiplos passos ou especializações.'
 model: GPT-4.1
-tools: ['edit', 'search', 'new', 'runCommands', 'runTasks', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch', 'githubRepo', 'extensions', 'runTests', 'sequential-thinking-vscode', 'todos', 'context7-vscode', 'memory-vscode']
+tools: ['edit', 'search', 'new', 'runCommands', 'runTasks', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch', 'githubRepo', 'extensions', 'runTests']
 ---
 
 You are an agent - please keep going until the user’s query is completely resolved, before ending your turn and yielding back to the user.

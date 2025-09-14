@@ -48,9 +48,7 @@ import {
   TaskNodeData,
   GraphEdge
 } from '@/types/graph';
-type GraphNode = Node<AgentNodeData | TaskNodeData>;
-
-type ReactFlowNode = Node<AgentNodeData | TaskNodeData>;
+type ReactFlowNode = Node<any>;
 type ReactFlowEdge = Edge;
 const initialNodes = [
   {
@@ -177,12 +175,13 @@ const initialEdges = [
 ];
 
 export default function VisualEditor() {
+  const [isLoadingFlow, setIsLoadingFlow] = useState(false);
   const location = useLocation();
   const { toast } = useToast();
-  const { initializeWithPrompt, addMessage, setOpen: setChatOpen } = useChatDockStore();
+  const { initializeWithPrompt, addMessage, setOpen: setChatOpen, workflow } = useChatDockStore();
   const queryClient = useQueryClient();
-  const [nodes, setNodes, onNodesChange] = useNodesState<GraphNode>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<ReactFlowNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<ReactFlowEdge>([]);
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [currentExecution, setCurrentExecution] = useState<Execution | null>(null);
@@ -244,10 +243,73 @@ export default function VisualEditor() {
     const state = location.state as { prompt?: string };
     if (state?.prompt) {
       initializeWithPrompt(state.prompt);
-      // Clear the state to prevent reopening on navigation
       window.history.replaceState({}, document.title);
     }
   }, [location.state, initializeWithPrompt]);
+
+  // Escuta workflow gerado pelo chat e atualiza o editor visual
+  useEffect(() => {
+    if (workflow && workflow.agents && workflow.tasks) {
+      setIsLoadingFlow(true);
+      setNodes([]);
+      setEdges([]);
+      setTimeout(() => {
+        const { nodes: newNodes, edges: newEdges } = createGraphFromProject(workflow.agents, workflow.tasks);
+        const decorated = newNodes.map((n: any) => {
+          const data: any = n.data || {};
+          const isAgent = !!data.agent;
+          const isTask = !!data.task;
+          const label = (
+            <div className="p-4 bg-surface border border-border rounded-radius-lg shadow-sm min-w-[260px]">
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-7 h-7 ${isAgent ? 'bg-accent-purple' : 'bg-accent-green'} rounded-radius flex items-center justify-center`}>
+                  <Users className="h-3.5 w-3.5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-sm truncate">{data.label}</h3>
+                  <p className="text-xs text-muted-foreground truncate">{data.description}</p>
+                </div>
+                <Badge variant={isAgent ? 'secondary' : 'outline'} className="ml-auto text-[10px]">{isAgent ? 'Agente' : 'Tarefa'}</Badge>
+              </div>
+              {isTask && data.task?.expected_output && (
+                <p className="text-[11px] text-muted-foreground mb-2 line-clamp-2">{data.task.expected_output}</p>
+              )}
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] text-muted-foreground">
+                  {isTask && data.agentName ? `Agente: ${data.agentName}` : null}
+                </div>
+                <Button size="sm" variant="ghost" className="p-1 h-6">
+                  <Settings className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          );
+          return {
+            ...n,
+            type: 'default',
+            data: {
+              ...n.data,
+              label,
+            },
+          };
+        });
+        setNodes(decorated);
+        setEdges(newEdges.map((e: GraphEdge) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          type: 'smoothstep',
+          animated: false,
+          style: { stroke: 'hsl(var(--primary))' },
+        })));
+        setIsLoadingFlow(false);
+        toast({
+          title: 'Workflow criado pelo chat',
+          description: 'O workflow foi gerado e exibido no editor visual.',
+        });
+      }, 350);
+    }
+  }, [workflow, setNodes, setEdges, toast]);
 
   // Auto-refresh when agents/tasks change
   useEffect(() => {
@@ -304,15 +366,15 @@ export default function VisualEditor() {
         };
       });
 
-      setNodes(decorated as ReactFlowNode[]);
+      setNodes(decorated);
       setEdges(newEdges.map((e: GraphEdge) => ({
         id: e.id,
         source: e.source,
         target: e.target,
-        type: 'smoothstep' as const,
+        type: 'smoothstep',
         animated: false,
         style: { stroke: 'hsl(var(--primary))' },
-      } as ReactFlowEdge)));
+      })));
     }
   }, [project, agents, tasks]);
 
@@ -366,7 +428,11 @@ export default function VisualEditor() {
     queryFn: () => apiClient.getExecution(currentExecution!.id),
     enabled: !!currentExecution && !!currentExecution.id && currentExecution.status === 'running',
     refetchInterval: 1000,
-    onSuccess: (data: Execution) => {
+  });
+
+  useEffect(() => {
+    if (executionQuery.isSuccess && executionQuery.data) {
+      const data: Execution = executionQuery.data;
       setCurrentExecution(data);
 
       // Append new logs to chat
@@ -381,7 +447,7 @@ export default function VisualEditor() {
           }
           setLastLogSize(logs.length);
         }
-      } catch {}
+      } catch { }
 
       if (data.status !== 'running') {
         setNodes((nds) =>
@@ -412,15 +478,16 @@ export default function VisualEditor() {
           }))
         );
       }
-    },
-    onError: (error) => {
+    }
+    if (executionQuery.isError && executionQuery.error) {
+      const error = executionQuery.error;
       toast({
         title: "Erro na execução",
-        description: error.message || "Falha ao buscar status",
+        description: (error as any).message || "Falha ao buscar status",
         variant: "destructive",
       });
-    },
-  });
+    }
+  }, [executionQuery.data, executionQuery.isSuccess, executionQuery.isError, executionQuery.error, setCurrentExecution, setNodes, setChatOpen, addMessage, toast, lastLogSize, setLastLogSize]);
 
   const onConnect = useCallback(
     async (params: Connection | Edge) => {
@@ -530,9 +597,52 @@ export default function VisualEditor() {
   };
 
   const handleAutoLayout = () => {
-    const updatedNodes = applyAutoLayout(nodes as unknown as GraphNode[], edges as unknown as GraphEdge[]);
-    setNodes(updatedNodes as unknown as ReactFlowNode[]);
-
+    // Remove label visual temporário para layout
+    const graphNodes = nodes.map((n) => ({
+      ...n,
+      data: { ...n.data }
+    }));
+    // Aplica layout
+    const layouted = applyAutoLayout(graphNodes as any, edges as any);
+    // Adiciona label visual novamente
+    const decorated = layouted.map((n: any) => {
+      const data: any = n.data || {};
+      const isAgent = !!data.agent;
+      const isTask = !!data.task;
+      const label = (
+        <div className="p-4 bg-surface border border-border rounded-radius-lg shadow-sm min-w-[260px]">
+          <div className="flex items-center gap-3 mb-2">
+            <div className={`w-7 h-7 ${isAgent ? 'bg-accent-purple' : 'bg-accent-green'} rounded-radius flex items-center justify-center`}>
+              <Users className="h-3.5 w-3.5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-sm truncate">{data.label}</h3>
+              <p className="text-xs text-muted-foreground truncate">{data.description}</p>
+            </div>
+            <Badge variant={isAgent ? 'secondary' : 'outline'} className="ml-auto text-[10px]">{isAgent ? 'Agente' : 'Tarefa'}</Badge>
+          </div>
+          {isTask && data.task?.expected_output && (
+            <p className="text-[11px] text-muted-foreground mb-2 line-clamp-2">{data.task.expected_output}</p>
+          )}
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] text-muted-foreground">
+              {isTask && data.agentName ? `Agente: ${data.agentName}` : null}
+            </div>
+            <Button size="sm" variant="ghost" className="p-1 h-6">
+              <Settings className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      );
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          label,
+        },
+      };
+    });
+    setNodes(decorated);
     toast({
       title: "Layout Aplicado",
       description: "Os nós foram reorganizados automaticamente",
@@ -561,8 +671,23 @@ export default function VisualEditor() {
     <div className="h-[calc(100vh-var(--topbar-height)-3rem)] flex">
       {/* Main Canvas */}
       <div className="flex-1 relative">
+        {isLoadingFlow && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80">
+            <div className="p-6 rounded-radius-lg bg-surface border border-border shadow-lg flex flex-col items-center gap-3">
+              <span className="text-lg font-semibold">Carregando novo fluxo...</span>
+              <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+            </div>
+          </div>
+        )}
         {/* Toolbar */}
         <div className="absolute top-4 left-4 z-10 bg-surface border border-border rounded-radius-lg shadow-lg p-2 flex gap-2">
+          <Button onClick={() => {
+            setNodes([]);
+            setEdges([]);
+            toast({ title: 'Fluxo limpo', description: 'Todos os cards e conexões foram removidos.' });
+          }} variant="outline" size="sm" title="Limpar fluxo">
+            Limpar fluxo
+          </Button>
           <Button onClick={handleRunWorkflow} className="btn-primary gap-2" size="sm" disabled={runMutation.isPending || !projectId} title={!projectId ? "Selecione um projeto primeiro" : "Executar workflow"}>
             <Play className="h-4 w-4" />
             {runMutation.isPending ? 'Executando...' : 'Run'}
