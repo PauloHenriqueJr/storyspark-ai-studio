@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import ReactFlow, {
   MiniMap,
   Controls,
@@ -10,13 +10,23 @@ import ReactFlow, {
   Edge,
   BackgroundVariant,
   Node,
+  MarkerType,
+  ReactFlowProvider,
+  useReactFlow,
+  ConnectionMode,
+  Panel,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import AgentNode from '@/components/nodes/AgentNode';
+import TaskNode from '@/components/nodes/TaskNode';
+import { getLayoutedElements } from '@/utils/layoutUtils';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient, queryKeys } from '@/lib/api';
 import {
@@ -48,8 +58,29 @@ import {
   TaskNodeData,
   GraphEdge
 } from '@/types/graph';
+// Custom node types
+const nodeTypes = {
+  agent: AgentNode,
+  task: TaskNode,
+};
+
 type ReactFlowNode = Node<any>;
 type ReactFlowEdge = Edge;
+
+// Animation keyframes
+const nodeAnimationStyle = `
+  @keyframes nodeEntry {
+    from {
+      opacity: 0;
+      transform: scale(0.8) translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+`;
+
 const initialNodes = [
   {
     id: '1',
@@ -174,18 +205,25 @@ const initialEdges = [
   },
 ];
 
-export default function VisualEditor() {
+function VisualEditorContent() {
   const [isLoadingFlow, setIsLoadingFlow] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'canvas' | 'inspector' | 'toolbox'>('canvas');
+  const [showChat, setShowChat] = useState(true);
   const location = useLocation();
   const { toast } = useToast();
   const { initializeWithPrompt, addMessage, setOpen: setChatOpen, workflow } = useChatDockStore();
   const queryClient = useQueryClient();
+  const reactFlowInstance = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<ReactFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ReactFlowEdge>([]);
-  const [isInspectorOpen, setIsInspectorOpen] = useState(true);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [currentExecution, setCurrentExecution] = useState<Execution | null>(null);
   const [lastLogSize, setLastLogSize] = useState(0);
+  const [editingNode, setEditingNode] = useState<any>(null);
+  const [runningNodes, setRunningNodes] = useState<Set<string>>(new Set());
+  const [layoutDirection, setLayoutDirection] = useState<'TB' | 'LR'>('TB');
 
   // Get project ID from URL
   const projectId = new URLSearchParams(location.search).get('projectId');
@@ -247,69 +285,138 @@ export default function VisualEditor() {
     }
   }, [location.state, initializeWithPrompt]);
 
-  // Escuta workflow gerado pelo chat e atualiza o editor visual
+  // Add animation styles to document
+  useEffect(() => {
+    const styleTag = document.createElement('style');
+    styleTag.innerHTML = nodeAnimationStyle;
+    document.head.appendChild(styleTag);
+    return () => {
+      document.head.removeChild(styleTag);
+    };
+  }, []);
+
+  // Helper function to create nodes from agents and tasks
+  const createNodesFromData = (agents: Agent[], tasks: Task[], withAnimation = false) => {
+    const newNodes: Node[] = [];
+    const newEdges: Edge[] = [];
+    let nodeIdCounter = 0;
+
+    // Create agent nodes
+    agents.forEach((agent, index) => {
+      const nodeId = `agent-${agent.id}`;
+      const node: Node = {
+        id: nodeId,
+        type: 'agent',
+        position: { x: 0, y: 0 }, // Will be calculated by layout
+        data: {
+          name: agent.name,
+          role: agent.role,
+          status: 'idle',
+          tools: agent.tools || [],
+          memory: agent.memory,
+          delegation: agent.allow_delegation,
+        },
+      };
+
+      if (withAnimation) {
+        node.style = {
+          opacity: 0,
+          animation: `nodeEntry 0.5s ease-out ${index * 0.1}s forwards`,
+        };
+      }
+
+      newNodes.push(node);
+    });
+
+    // Create task nodes and edges
+    tasks.forEach((task, index) => {
+      const taskId = `task-${task.id}`;
+      const agentNode = agents.find(a => a.id === task.agent_id);
+      
+      const node: Node = {
+        id: taskId,
+        type: 'task',
+        position: { x: 0, y: 0 }, // Will be calculated by layout
+        data: {
+          description: task.description,
+          expectedOutput: task.expected_output,
+          status: 'pending',
+          agentName: agentNode?.name,
+          async: task.async_execution,
+          outputFile: task.output_file,
+        },
+      };
+
+      if (withAnimation) {
+        node.style = {
+          opacity: 0,
+          animation: `nodeEntry 0.5s ease-out ${(agents.length + index) * 0.1}s forwards`,
+        };
+      }
+
+      newNodes.push(node);
+
+      // Create edge from agent to task
+      if (task.agent_id) {
+        const edge: Edge = {
+          id: `edge-${nodeIdCounter++}`,
+          source: `agent-${task.agent_id}`,
+          target: taskId,
+          type: 'smoothstep',
+          animated: false,
+          style: {
+            stroke: '#94a3b8',
+            strokeWidth: 2,
+          },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 15,
+            height: 15,
+            color: '#94a3b8',
+          },
+        };
+        newEdges.push(edge);
+      }
+    });
+
+    // Apply automatic layout
+    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+      newNodes,
+      newEdges,
+      layoutDirection
+    );
+
+    return { nodes: layoutedNodes, edges: layoutedEdges };
+  };
+
+  // Listen for workflow generated by chat and update visual editor
   useEffect(() => {
     if (workflow && workflow.agents && workflow.tasks) {
       setIsLoadingFlow(true);
       setNodes([]);
       setEdges([]);
+      
       setTimeout(() => {
-        const { nodes: newNodes, edges: newEdges } = createGraphFromProject(workflow.agents, workflow.tasks);
-        const decorated = newNodes.map((n: any) => {
-          const data: any = n.data || {};
-          const isAgent = !!data.agent;
-          const isTask = !!data.task;
-          const label = (
-            <div className="p-4 bg-surface border border-border rounded-radius-lg shadow-sm min-w-[260px]">
-              <div className="flex items-center gap-3 mb-2">
-                <div className={`w-7 h-7 ${isAgent ? 'bg-accent-purple' : 'bg-accent-green'} rounded-radius flex items-center justify-center`}>
-                  <Users className="h-3.5 w-3.5 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-sm truncate">{data.label}</h3>
-                  <p className="text-xs text-muted-foreground truncate">{data.description}</p>
-                </div>
-                <Badge variant={isAgent ? 'secondary' : 'outline'} className="ml-auto text-[10px]">{isAgent ? 'Agente' : 'Tarefa'}</Badge>
-              </div>
-              {isTask && data.task?.expected_output && (
-                <p className="text-[11px] text-muted-foreground mb-2 line-clamp-2">{data.task.expected_output}</p>
-              )}
-              <div className="flex items-center justify-between">
-                <div className="text-[10px] text-muted-foreground">
-                  {isTask && data.agentName ? `Agente: ${data.agentName}` : null}
-                </div>
-                <Button size="sm" variant="ghost" className="p-1 h-6">
-                  <Settings className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-          );
-          return {
-            ...n,
-            type: 'default',
-            data: {
-              ...n.data,
-              label,
-            },
-          };
-        });
-        setNodes(decorated);
-        setEdges(newEdges.map((e: GraphEdge) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          type: 'smoothstep',
-          animated: false,
-          style: { stroke: 'hsl(var(--primary))' },
-        })));
+        const { nodes: newNodes, edges: newEdges } = createNodesFromData(
+          workflow.agents,
+          workflow.tasks,
+          true // with animation
+        );
+        
+        setNodes(newNodes);
+        setEdges(newEdges);
         setIsLoadingFlow(false);
+        
         toast({
-          title: 'Workflow criado pelo chat',
-          description: 'O workflow foi gerado e exibido no editor visual.',
+          title: 'Workflow criado',
+          description: `${workflow.agents.length} agentes e ${workflow.tasks.length} tarefas criados com sucesso.`,
         });
-      }, 350);
+        
+        // Auto-fit after loading
+        setTimeout(() => reactFlowInstance?.fitView({ padding: 0.3, duration: 400 }), 500);
+      }, 300);
     }
-  }, [workflow, setNodes, setEdges, toast]);
+  }, [workflow, setNodes, setEdges, toast, reactFlowInstance, layoutDirection]);
 
   // Auto-refresh when agents/tasks change
   useEffect(() => {
@@ -322,61 +429,36 @@ export default function VisualEditor() {
     return () => clearInterval(interval);
   }, [projectId, queryClient]);
 
+  // Update nodes when agents/tasks change
   useEffect(() => {
-    if (project && agents.length >= 0 && tasks.length >= 0) {
-      const { nodes: newNodes, edges: newEdges } = createGraphFromProject(agents, tasks);
+    if (project && (agents.length > 0 || tasks.length > 0)) {
+      const { nodes: newNodes, edges: newEdges } = createNodesFromData(
+        agents,
+        tasks,
+        false // no animation for updates
+      );
 
-      // Decorate nodes with label content for default renderer
-      const decorated = (newNodes as any[]).map((n) => {
-        const data: any = n.data || {};
-        const isAgent = !!data.agent;
-        const isTask = !!data.task;
-        const label = (
-          <div className="p-4 bg-surface border border-border rounded-radius-lg shadow-sm min-w-[260px]">
-            <div className="flex items-center gap-3 mb-2">
-              <div className={`w-7 h-7 ${isAgent ? 'bg-accent-purple' : 'bg-accent-green'} rounded-radius flex items-center justify-center`}>
-                <Users className="h-3.5 w-3.5 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-sm truncate">{data.label}</h3>
-                <p className="text-xs text-muted-foreground truncate">{data.description}</p>
-              </div>
-              <Badge variant={isAgent ? 'secondary' : 'outline'} className="ml-auto text-[10px]">{isAgent ? 'Agente' : 'Tarefa'}</Badge>
-            </div>
-            {isTask && data.task?.expected_output && (
-              <p className="text-[11px] text-muted-foreground mb-2 line-clamp-2">{data.task.expected_output}</p>
-            )}
-            <div className="flex items-center justify-between">
-              <div className="text-[10px] text-muted-foreground">
-                {isTask && data.agentName ? `Agente: ${data.agentName}` : null}
-              </div>
-              <Button size="sm" variant="ghost" className="p-1 h-6">
-                <Settings className="h-3 w-3" />
-              </Button>
-            </div>
-          </div>
-        );
-        return {
-          ...n,
-          type: 'default',
-          data: {
-            ...n.data,
-            label,
-          },
-        };
+      // Update status for running nodes
+      const updatedNodes = newNodes.map(node => {
+        if (runningNodes.has(node.id)) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              status: 'running',
+            },
+          };
+        }
+        return node;
       });
 
-      setNodes(decorated);
-      setEdges(newEdges.map((e: GraphEdge) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        type: 'smoothstep',
-        animated: false,
-        style: { stroke: 'hsl(var(--primary))' },
+      setNodes(updatedNodes);
+      setEdges(newEdges.map(edge => ({
+        ...edge,
+        animated: currentExecution?.status === 'running',
       })));
     }
-  }, [project, agents, tasks]);
+  }, [project, agents, tasks, runningNodes, currentExecution, layoutDirection]);
 
   const runMutation = useMutation({
     mutationFn: (inputs: Record<string, any>) => apiClient.run.project(Number(projectId), { inputs, language: 'pt-br' }),
@@ -435,47 +517,94 @@ export default function VisualEditor() {
       const data: Execution = executionQuery.data;
       setCurrentExecution(data);
 
+      // Track running nodes
+      if (data.status === 'running') {
+        // Simulate node progression (in real app, this would come from backend)
+        const simulatedActiveNodes = new Set<string>();
+        nodes.forEach((node, index) => {
+          if (index === 0 || (index === 1 && Math.random() > 0.5)) {
+            simulatedActiveNodes.add(node.id);
+          }
+        });
+        setRunningNodes(simulatedActiveNodes);
+      } else {
+        setRunningNodes(new Set());
+      }
+
       // Append new logs to chat
       try {
         const logs = data.logs || '';
         if (logs && logs.length > lastLogSize) {
           const delta = logs.slice(lastLogSize);
-          const lines = delta.split('\n').map(l => l.trim()).filter(Boolean).slice(-5); // append last few lines to avoid spam
+          const lines = delta.split('\n').map(l => l.trim()).filter(Boolean).slice(-5);
           if (lines.length) {
             setChatOpen(true);
-            lines.forEach((line) => addMessage({ id: `log-${data.id}-${Math.random()}`, type: 'assistant', content: line, timestamp: new Date().toISOString() }));
+            lines.forEach((line) => {
+              // Clean up log messages
+              const cleanedLine = line
+                .replace(/\*\*/g, '')
+                .replace(/[🎯✅📋🔧💡]/g, '')
+                .trim();
+              if (cleanedLine) {
+                addMessage({ 
+                  id: `log-${data.id}-${Math.random()}`, 
+                  type: 'assistant', 
+                  content: cleanedLine, 
+                  timestamp: new Date().toISOString() 
+                });
+              }
+            });
           }
           setLastLogSize(logs.length);
         }
       } catch { }
 
       if (data.status !== 'running') {
+        setRunningNodes(new Set());
+        // Update all nodes to refresh their labels
         setNodes((nds) =>
-          nds.map((node: ReactFlowNode) => ({
-            ...node,
-            data: {
-              ...node.data,
-              isRunning: false,
-              status: data.status,
-            },
-          }))
+          nds.map((node: ReactFlowNode) => {
+            const nodeData = node.data as any;
+            return {
+              ...node,
+              data: {
+                ...nodeData,
+                label: createNodeLabel(nodeData, false),
+                isRunning: false,
+                status: data.status,
+              },
+            };
+          })
         );
         setChatOpen(true);
-        addMessage({ id: `exec-end-${data.id}`, type: 'assistant', content: data.status === 'completed' ? 'Execução concluída com sucesso.' : `Execução falhou: ${data.error_message || 'verifique os logs'}`, timestamp: new Date().toISOString() });
+        addMessage({ 
+          id: `exec-end-${data.id}`, 
+          type: 'assistant', 
+          content: data.status === 'completed' 
+            ? 'Execução concluída com sucesso.' 
+            : `Execução falhou: ${data.error_message || 'verifique os logs'}`, 
+          timestamp: new Date().toISOString() 
+        });
         toast({
           title: data.status === 'completed' ? "Concluído" : "Falha",
           description: data.output_payload?.result || data.logs || data.error_message,
         });
       } else {
+        // Update running nodes with animation
         setNodes((nds) =>
-          nds.map((node: ReactFlowNode) => ({
-            ...node,
-            data: {
-              ...node.data,
-              isRunning: true,
-              status: 'running',
-            },
-          }))
+          nds.map((node: ReactFlowNode) => {
+            const nodeData = node.data as any;
+            const isRunning = runningNodes.has(node.id);
+            return {
+              ...node,
+              data: {
+                ...nodeData,
+                label: createNodeLabel(nodeData, isRunning),
+                isRunning,
+                status: 'running',
+              },
+            };
+          })
         );
       }
     }
@@ -597,52 +726,14 @@ export default function VisualEditor() {
   };
 
   const handleAutoLayout = () => {
-    // Remove label visual temporário para layout
-    const graphNodes = nodes.map((n) => ({
-      ...n,
-      data: { ...n.data }
-    }));
-    // Aplica layout
-    const layouted = applyAutoLayout(graphNodes as any, edges as any);
-    // Adiciona label visual novamente
-    const decorated = layouted.map((n: any) => {
-      const data: any = n.data || {};
-      const isAgent = !!data.agent;
-      const isTask = !!data.task;
-      const label = (
-        <div className="p-4 bg-surface border border-border rounded-radius-lg shadow-sm min-w-[260px]">
-          <div className="flex items-center gap-3 mb-2">
-            <div className={`w-7 h-7 ${isAgent ? 'bg-accent-purple' : 'bg-accent-green'} rounded-radius flex items-center justify-center`}>
-              <Users className="h-3.5 w-3.5 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-sm truncate">{data.label}</h3>
-              <p className="text-xs text-muted-foreground truncate">{data.description}</p>
-            </div>
-            <Badge variant={isAgent ? 'secondary' : 'outline'} className="ml-auto text-[10px]">{isAgent ? 'Agente' : 'Tarefa'}</Badge>
-          </div>
-          {isTask && data.task?.expected_output && (
-            <p className="text-[11px] text-muted-foreground mb-2 line-clamp-2">{data.task.expected_output}</p>
-          )}
-          <div className="flex items-center justify-between">
-            <div className="text-[10px] text-muted-foreground">
-              {isTask && data.agentName ? `Agente: ${data.agentName}` : null}
-            </div>
-            <Button size="sm" variant="ghost" className="p-1 h-6">
-              <Settings className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-      );
-      return {
-        ...n,
-        data: {
-          ...n.data,
-          label,
-        },
-      };
-    });
-    setNodes(decorated);
+    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+      nodes,
+      edges,
+      layoutDirection
+    );
+    setNodes(layoutedNodes);
+    setEdges(layoutedEdges);
+    setTimeout(() => reactFlowInstance?.fitView({ padding: 0.3, duration: 400 }), 100);
     toast({
       title: "Layout Aplicado",
       description: "Os nós foram reorganizados automaticamente",
@@ -667,10 +758,32 @@ export default function VisualEditor() {
     });
   };
 
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsInspectorOpen(window.innerWidth >= 1024);
+      if (window.innerWidth < 768) {
+        setActiveTab('canvas');
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Auto-fit view when nodes change
+  useEffect(() => {
+    if (nodes.length > 0 && reactFlowInstance) {
+      setTimeout(() => {
+        reactFlowInstance.fitView({ padding: 0.2, duration: 200 });
+      }, 100);
+    }
+  }, [nodes, reactFlowInstance]);
+
   return (
-    <div className="h-[calc(100vh-var(--topbar-height)-3rem)] flex">
+    <div className="h-[calc(100vh-var(--topbar-height))] flex flex-col bg-gray-50 dark:bg-gray-950">
+
       {/* Main Canvas */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative min-h-0">
         {isLoadingFlow && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80">
             <div className="p-6 rounded-radius-lg bg-surface border border-border shadow-lg flex flex-col items-center gap-3">
@@ -679,116 +792,148 @@ export default function VisualEditor() {
             </div>
           </div>
         )}
-        {/* Toolbar */}
-        <div className="absolute top-4 left-4 z-10 bg-surface border border-border rounded-radius-lg shadow-lg p-2 flex gap-2">
-          <Button onClick={() => {
-            setNodes([]);
-            setEdges([]);
-            toast({ title: 'Fluxo limpo', description: 'Todos os cards e conexões foram removidos.' });
-          }} variant="outline" size="sm" title="Limpar fluxo">
-            Limpar fluxo
+        {/* Clean Toolbar */}
+        <Panel position="top-left" className="bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 m-4">
+          <Button 
+            onClick={() => {
+              setNodes([]);
+              setEdges([]);
+              toast({ title: 'Fluxo limpo', description: 'Todos os cards e conexões foram removidos.' });
+            }} 
+            variant="outline" 
+            size="sm" 
+            title="Limpar fluxo"
+            className="text-xs md:text-sm"
+          >
+            <RotateCcw className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+            <span className="hidden md:inline">Limpar</span>
           </Button>
-          <Button onClick={handleRunWorkflow} className="btn-primary gap-2" size="sm" disabled={runMutation.isPending || !projectId} title={!projectId ? "Selecione um projeto primeiro" : "Executar workflow"}>
-            <Play className="h-4 w-4" />
-            {runMutation.isPending ? 'Executando...' : 'Run'}
+          <Button 
+            onClick={handleRunWorkflow} 
+            className="btn-primary gap-1 md:gap-2" 
+            size="sm" 
+            disabled={runMutation.isPending || !projectId} 
+            title={!projectId ? "Selecione um projeto primeiro" : "Executar workflow"}
+          >
+            <Play className="h-3 w-3 md:h-4 md:w-4" />
+            <span className="text-xs md:text-sm">{runMutation.isPending ? 'Run...' : 'Run'}</span>
           </Button>
           {runMutation.isPending && <div className="text-xs text-muted-foreground mt-1">Carregando execução...</div>}
           {!projectId && <div className="text-xs text-muted-foreground mt-1">Selecione um projeto para executar</div>}
-          <Button onClick={handleValidate} variant="outline" size="sm">
-            Validate
+          <Button 
+            onClick={handleValidate} 
+            variant="outline" 
+            size="sm"
+            className="text-xs md:text-sm"
+          >
+            <CheckSquare className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+            <span className="hidden md:inline">Validar</span>
           </Button>
-          <Separator orientation="vertical" className="h-6" />
-          <Button onClick={handleAutoLayout} variant="ghost" size="sm">
-            <Layers className="h-4 w-4" />
+          <Separator orientation="vertical" className="h-4 md:h-6 hidden md:block" />
+          <Button 
+            onClick={handleAutoLayout} 
+            variant="ghost" 
+            size="sm"
+            title="Auto Layout"
+          >
+            <Layers className="h-3 w-3 md:h-4 md:w-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => window.location.reload()} title="Reset view">
-            <RotateCcw className="h-4 w-4" />
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => reactFlowInstance?.fitView({ padding: 0.2, duration: 200 })} 
+            title="Fit View"
+          >
+            <Maximize className="h-3 w-3 md:h-4 md:w-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => handleAutoLayout()} title="Re-layout">
-            <RotateCw className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => document.fullscreenEnabled && document.body.requestFullscreen?.()} title="Fullscreen">
-            <Maximize className="h-4 w-4" />
-          </Button>
-          <Separator orientation="vertical" className="h-6" />
-          <Button onClick={handleExportPNG} variant="ghost" size="sm" disabled={exportMutation.isPending || !projectId} title={!projectId ? "Selecione um projeto primeiro" : "Exportar como PNG/ZIP"}>
-            <Download className="h-4 w-4" />
-            {exportMutation.isPending && <span className="ml-2">Exportando...</span>}
+          <Separator orientation="vertical" className="h-4 md:h-6 hidden md:block" />
+          <Button 
+            onClick={handleExportPNG} 
+            variant="ghost" 
+            size="sm" 
+            disabled={exportMutation.isPending || !projectId} 
+            title={!projectId ? "Selecione um projeto primeiro" : "Exportar"}
+          >
+            <Download className="h-3 w-3 md:h-4 md:w-4" />
+            {exportMutation.isPending && <span className="ml-1 text-xs hidden md:inline">...</span>}
           </Button>
           {!projectId && <div className="text-xs text-muted-foreground mt-1">Selecione um projeto para exportar</div>}
-        </div>
+        </Panel>
 
-        {/* Toolbox */}
-        <div className="absolute top-4 right-4 z-10 bg-surface border border-border rounded-radius-lg shadow-lg p-4 w-64">
-          <h3 className="font-semibold text-sm mb-3">Toolbox</h3>
-          <div className="space-y-2">
-            <Button variant="outline" className="w-full justify-start gap-2" size="sm"
-              onClick={async () => {
-                if (!projectId) return;
-                // Quick add: blank agent
-                try {
-                  await apiClient.createAgent(projectId, { name: 'Novo Agente', role: 'Função', goal: 'Objetivo', backstory: '', tools: [], verbose: true, memory: false, allow_delegation: false });
-                  await queryClient.invalidateQueries({ queryKey: queryKeys.agents(projectId) });
-                } catch (e: any) {
-                  toast({ title: 'Falha ao criar agente', description: e?.message || 'Erro', variant: 'destructive' });
-                }
-              }}>
-              <Users className="h-4 w-4" />
-              Add Agent
+        {/* Layout Control Panel */}
+        <Panel position="top-right" className="bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 m-4">
+          <div className="p-2 flex items-center gap-2">
+            <Button
+              variant={layoutDirection === 'TB' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                setLayoutDirection('TB');
+                handleAutoLayout();
+              }}
+              title="Vertical Layout"
+            >
+              <Layers className="h-4 w-4 rotate-0" />
             </Button>
-            <Button variant="outline" className="w-full justify-start gap-2" size="sm"
-              onClick={async () => {
-                if (!projectId) return;
-                // Quick add: blank task, assign to first agent if exists
-                try {
-                  const firstAgent = agents?.[0];
-                  await apiClient.createTask(projectId, { agent_id: firstAgent?.id || '', description: 'Nova Tarefa {input}', expected_output: 'Resultado esperado...', tools: [], async_execution: false, output_file: '' });
-                  await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
-                } catch (e: any) {
-                  toast({ title: 'Falha ao criar tarefa', description: e?.message || 'Erro', variant: 'destructive' });
-                }
-              }}>
-              <CheckSquare className="h-4 w-4" />
-              Add Task
-            </Button>
-            <Button variant="outline" className="w-full justify-start gap-2" size="sm">
-              <Plus className="h-4 w-4" />
-              Add Connection
+            <Button
+              variant={layoutDirection === 'LR' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                setLayoutDirection('LR');
+                handleAutoLayout();
+              }}
+              title="Horizontal Layout"
+            >
+              <Layers className="h-4 w-4 rotate-90" />
             </Button>
           </div>
-        </div>
+        </Panel>
 
-        {/* React Flow Canvas */}
+        {/* React Flow Canvas - Clean Style */}
         <ReactFlow
           nodes={nodes}
           edges={edges}
+          nodeTypes={nodeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeClick={onNodeClick}
-          className="bg-background"
+          connectionMode={ConnectionMode.Loose}
+          className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900"
           fitView
-          attributionPosition="bottom-left"
+          fitViewOptions={{ padding: 0.3 }}
+          defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+          proOptions={{ hideAttribution: true }}
         >
-          <Controls position="bottom-left" />
+          <Controls 
+            position="bottom-left" 
+            className="!bg-surface !border-border !shadow-lg"
+            showZoom={true}
+            showFitView={true}
+            showInteractive={false}
+          />
           <MiniMap
             position="bottom-right"
-            className="bg-surface border border-border rounded-radius"
-            nodeColor="hsl(var(--primary))"
+            className="!bg-surface !border-border !rounded-radius hidden md:block"
+            nodeColor={(node) => runningNodes.has(node.id) ? 'hsl(var(--destructive))' : 'hsl(var(--primary))'}
             maskColor="hsl(var(--muted) / 0.5)"
+            pannable
+            zoomable
           />
           <Background
             variant={BackgroundVariant.Dots}
-            gap={20}
-            size={1}
-            color="hsl(var(--border))"
+            gap={16}
+            size={0.8}
+            color="#e5e7eb"
+            className="dark:opacity-20"
           />
         </ReactFlow>
+
       </div>
 
-      {/* Inspector Panel */}
-      {isInspectorOpen && (
-        <div className="w-80 bg-surface border-l border-border p-4 overflow-y-auto">
+
+      {/* Inspector Panel - Clean Sidebar */}
+      {selectedNode && (
+        <div className="absolute right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-xl z-20 overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold">Inspector</h3>
             <Button
@@ -826,12 +971,69 @@ export default function VisualEditor() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Properties</CardTitle>
+                  <CardTitle className="text-base flex items-center justify-between">
+                    Edit Properties
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (editingNode) {
+                          // Save changes
+                          setNodes((nds) =>
+                            nds.map((node) => {
+                              if (node.id === selectedNode.id) {
+                                return {
+                                  ...node,
+                                  data: {
+                                    ...node.data,
+                                    label: editingNode.label,
+                                    description: editingNode.description,
+                                  },
+                                };
+                              }
+                              return node;
+                            })
+                          );
+                          setEditingNode(null);
+                          toast({ title: 'Node updated', description: 'Changes saved successfully.' });
+                        } else {
+                          setEditingNode({
+                            label: selectedNode.data?.label || '',
+                            description: selectedNode.data?.description || '',
+                          });
+                        }
+                      }}
+                    >
+                      {editingNode ? 'Save' : 'Edit'}
+                    </Button>
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Select a node to edit its properties
-                  </p>
+                <CardContent className="space-y-3">
+                  {editingNode ? (
+                    <>
+                      <div>
+                        <label className="text-sm font-medium">Label</label>
+                        <Input
+                          value={editingNode.label}
+                          onChange={(e) => setEditingNode({ ...editingNode, label: e.target.value })}
+                          placeholder="Enter label"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium">Description</label>
+                        <Textarea
+                          value={editingNode.description}
+                          onChange={(e) => setEditingNode({ ...editingNode, description: e.target.value })}
+                          placeholder="Enter description"
+                          rows={3}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      Click "Edit" to modify node properties
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -847,5 +1049,13 @@ export default function VisualEditor() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function VisualEditor() {
+  return (
+    <ReactFlowProvider>
+      <VisualEditorContent />
+    </ReactFlowProvider>
   );
 }

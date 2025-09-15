@@ -213,10 +213,10 @@ export function ChatDock() {
     }
   }, [isInEditor]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Show button in all pages, but navigate to editor when clicked
+  // Show button in all pages, but navigate to editor when clicked - Responsive
   if (!isOpen) {
     return (
-      <div className="fixed left-4 bottom-4 z-50">
+      <div className="fixed left-3 bottom-3 md:left-4 md:bottom-4 z-50">
         <Button
           onClick={async () => {
             if (!isInEditor) {
@@ -231,11 +231,12 @@ export function ChatDock() {
               setOpen(true);
             }
           }}
-          className="btn-primary gap-2 shadow-lg animate-pulse-glow"
+          className="btn-primary gap-1.5 md:gap-2 shadow-lg animate-pulse-glow text-xs md:text-sm px-3 py-2 md:px-4 md:py-2.5"
           size="lg"
         >
-          <Sparkles className="h-5 w-5" />
-          {isInEditor ? 'AI Builder' : 'Build with AI'}
+          <Sparkles className="h-4 w-4 md:h-5 md:w-5" />
+          <span className="hidden sm:inline">{isInEditor ? 'AI Builder' : 'Build with AI'}</span>
+          <span className="sm:hidden">AI</span>
         </Button>
       </div>
     );
@@ -247,51 +248,57 @@ export function ChatDock() {
   }
 
   return (
-    <div className="fixed left-0 top-topbar bottom-0 w-80 bg-surface border-r border-border z-40 flex flex-col">
-      {/* Header */}
-      <div className="p-4 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-accent-purple rounded-radius flex items-center justify-center">
-            <Sparkles className="h-4 w-4 text-white" />
+    <div className={cn(
+      "fixed z-40 bg-surface border-border flex flex-col",
+      "left-0 right-0 bottom-0 h-[70vh] border-t rounded-t-2xl", // Mobile: bottom sheet
+      "sm:left-0 sm:right-auto sm:top-topbar sm:bottom-0 sm:h-auto sm:w-72 sm:border-r sm:border-t-0 sm:rounded-none", // Tablet
+      "lg:w-80 xl:w-96" // Desktop
+    )}>
+      {/* Header - Responsive */}
+      <div className="p-3 sm:p-4 border-b border-border flex items-center justify-between">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 bg-accent-purple rounded-radius flex items-center justify-center">
+            <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
           </div>
           <div>
-            <h3 className="font-semibold text-heading">AI Builder</h3>
-            <p className="text-xs text-muted-foreground">Create with natural language</p>
+            <h3 className="font-semibold text-sm sm:text-base">AI Builder</h3>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Create with natural language</p>
           </div>
         </div>
         <Button
           variant="ghost"
           size="sm"
           onClick={() => setOpen(false)}
+          className="h-7 w-7 sm:h-8 sm:w-8"
         >
-          <X className="h-4 w-4" />
+          <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </Button>
       </div>
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 p-4">
+      {/* Messages - Responsive */}
+      <ScrollArea className="flex-1 p-3 sm:p-4">
         {messages.length === 0 ? (
-          <div className="space-y-4">
-            <div className="text-center py-8">
-              <Bot className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h4 className="font-medium text-heading mb-2">
+          <div className="space-y-3 sm:space-y-4">
+            <div className="text-center py-6 sm:py-8">
+              <Bot className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-3 sm:mb-4" />
+              <h4 className="font-medium text-sm sm:text-base mb-2">
                 What would you like to build?
               </h4>
-              <p className="text-sm text-muted-foreground mb-4">
+              <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4 px-4">
                 Describe what you want to automate and I'll help you create the perfect workflow.
               </p>
             </div>
             
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 mb-3">
-                <Lightbulb className="h-4 w-4 text-accent-yellow" />
-                <span className="text-sm font-medium">Quick suggestions:</span>
+            <div className="space-y-1.5 sm:space-y-2">
+              <div className="flex items-center gap-2 mb-2 sm:mb-3">
+                <Lightbulb className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-accent-yellow" />
+                <span className="text-xs sm:text-sm font-medium">Quick suggestions:</span>
               </div>
               {quickSuggestions.map((suggestion, index) => (
                 <button
                   key={index}
                   onClick={() => handleSuggestionClick(suggestion)}
-                  className="w-full text-left p-3 rounded-radius border border-border hover:bg-muted-hover transition-colors text-sm"
+                  className="w-full text-left p-2.5 sm:p-3 rounded-radius border border-border hover:bg-muted-hover transition-colors text-xs sm:text-sm"
                 >
                   {suggestion}
                 </button>
@@ -299,38 +306,38 @@ export function ChatDock() {
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {messages.map((message) => (
               <div
                 key={message.id}
                 className={cn(
-                  'flex gap-3',
+                  'flex gap-2 sm:gap-3',
                   message.type === 'user' ? 'justify-end' : 'justify-start'
                 )}
               >
                 {message.type === 'assistant' && (
-                  <div className="w-8 h-8 bg-accent-purple rounded-radius flex items-center justify-center flex-shrink-0">
-                    <Bot className="h-4 w-4 text-white" />
+                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-accent-purple rounded-radius flex items-center justify-center flex-shrink-0">
+                    <Bot className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                   </div>
                 )}
                 
                 <div
                   className={cn(
-                    'max-w-[70%] rounded-radius-lg p-3 space-y-2',
+                    'max-w-[75%] sm:max-w-[70%] rounded-radius-lg p-2.5 sm:p-3 space-y-1.5 sm:space-y-2',
                     message.type === 'user'
                       ? 'bg-primary text-primary-foreground ml-auto'
                       : 'bg-muted'
                   )}
                 >
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  <p className="text-xs sm:text-sm whitespace-pre-wrap">{message.content}</p>
                   
                   {message.suggestions && (
-                    <div className="flex flex-wrap gap-2 pt-2">
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2 pt-1.5 sm:pt-2">
                       {message.suggestions.map((suggestion, index) => (
                         <Badge
                           key={index}
                           variant="secondary"
-                          className="cursor-pointer hover:bg-secondary-hover text-xs"
+                          className="cursor-pointer hover:bg-secondary-hover text-[10px] sm:text-xs py-0.5 px-2"
                           onClick={() => handleSuggestionClick(suggestion)}
                         >
                           {suggestion}
@@ -341,23 +348,23 @@ export function ChatDock() {
                 </div>
                 
                 {message.type === 'user' && (
-                  <div className="w-8 h-8 bg-secondary rounded-radius flex items-center justify-center flex-shrink-0">
-                    <User className="h-4 w-4" />
+                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-secondary rounded-radius flex items-center justify-center flex-shrink-0">
+                    <User className="h-3 w-3 sm:h-4 sm:w-4" />
                   </div>
                 )}
               </div>
             ))}
             
             {isLoading && (
-              <div className="flex gap-3">
-                <div className="w-8 h-8 bg-accent-purple rounded-radius flex items-center justify-center">
-                  <Bot className="h-4 w-4 text-white" />
+              <div className="flex gap-2 sm:gap-3">
+                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-accent-purple rounded-radius flex items-center justify-center">
+                  <Bot className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                 </div>
-                <div className="bg-muted rounded-radius-lg p-3">
+                <div className="bg-muted rounded-radius-lg p-2.5 sm:p-3">
                   <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-muted-foreground rounded-full animate-bounce" />
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                   </div>
                 </div>
               </div>
@@ -366,23 +373,23 @@ export function ChatDock() {
         )}
       </ScrollArea>
 
-      {/* Input */}
-      <div className="p-4 border-t border-border">
+      {/* Input - Responsive */}
+      <div className="p-3 sm:p-4 border-t border-border">
         <div className="flex gap-2">
           <Input
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Describe what you want to build..."
-            className="input-notion flex-1"
+            className="input-notion flex-1 text-xs sm:text-sm"
             disabled={isLoading}
           />
           <Button
             onClick={handleSendMessage}
             disabled={!inputValue.trim() || isLoading}
-            className="btn-primary p-2"
+            className="btn-primary p-1.5 sm:p-2"
           >
-            <Send className="h-4 w-4" />
+            <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
