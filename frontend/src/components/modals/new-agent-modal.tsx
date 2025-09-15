@@ -67,7 +67,7 @@ const agentTemplates = [
 export function NewAgentModal({ open, onOpenChange, projectId }: NewAgentModalProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  
+
   const createAgentMutation = useMutation({
     mutationFn: (data: any) => apiClient.createAgent(projectId, data),
     onSuccess: async () => {
@@ -99,7 +99,7 @@ export function NewAgentModal({ open, onOpenChange, projectId }: NewAgentModalPr
       });
     },
   });
-  
+
   const [formData, setFormData] = useState({
     name: '',
     role: '',
@@ -130,7 +130,7 @@ export function NewAgentModal({ open, onOpenChange, projectId }: NewAgentModalPr
       });
       return;
     }
-  
+
     const data = {
       name: formData.name,
       role: formData.role,
@@ -158,7 +158,7 @@ export function NewAgentModal({ open, onOpenChange, projectId }: NewAgentModalPr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bot className="h-5 w-5 text-primary" />
@@ -169,10 +169,10 @@ export function NewAgentModal({ open, onOpenChange, projectId }: NewAgentModalPr
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
           {/* Basic Info */}
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Nome do Agente</Label>
                 <Input
@@ -224,7 +224,7 @@ export function NewAgentModal({ open, onOpenChange, projectId }: NewAgentModalPr
             {/* Tools Selection */}
             <div className="space-y-2">
               <Label>Ferramentas Disponíveis</Label>
-              <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 bg-muted rounded-md">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 sm:max-h-40 overflow-y-auto p-2 bg-muted rounded-md">
                 {AVAILABLE_TOOLS.map(tool => (
                   <div key={tool} className="flex items-center gap-2 p-1 rounded">
                     <Checkbox
@@ -244,7 +244,7 @@ export function NewAgentModal({ open, onOpenChange, projectId }: NewAgentModalPr
             </div>
 
             {/* Advanced Options */}
-            <div className="grid grid-cols-2 gap-4 p-3 bg-muted/50 rounded-lg">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 p-3 bg-muted/50 rounded-lg">
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="verbose"
@@ -275,17 +275,16 @@ export function NewAgentModal({ open, onOpenChange, projectId }: NewAgentModalPr
           {/* Templates */}
           <div className="space-y-4">
             <Label>Template do Agente</Label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {agentTemplates.map((template) => {
                 const Icon = template.icon;
                 const isSelected = formData.template === template.id;
-                
+
                 return (
                   <div
                     key={template.id}
-                    className={`relative p-4 border rounded-lg cursor-pointer transition-all hover:border-primary ${
-                      isSelected ? 'border-primary bg-primary/5' : 'border-border'
-                    }`}
+                    className={`relative p-4 border rounded-lg cursor-pointer transition-all hover:border-primary ${isSelected ? 'border-primary bg-primary/5' : 'border-border'
+                      }`}
                     onClick={() => {
                       handleInputChange('template', template.id);
                       // Auto-fill based on template (optional)
@@ -302,16 +301,14 @@ export function NewAgentModal({ open, onOpenChange, projectId }: NewAgentModalPr
                     }}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-lg ${
-                        isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                      }`}>
+                      <div className={`p-2 rounded-lg ${isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                        }`}>
                         <Icon className="h-4 w-4" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <h4 className={`font-medium text-sm ${
-                            isSelected ? 'text-primary' : 'text-heading'
-                          }`}>
+                          <h4 className={`font-medium text-sm ${isSelected ? 'text-primary' : 'text-heading'
+                            }`}>
                             {template.name}
                           </h4>
                           {template.badge && (
@@ -329,11 +326,11 @@ export function NewAgentModal({ open, onOpenChange, projectId }: NewAgentModalPr
                 );
               })}
             </div>
-            
+
             {selectedTemplate && selectedTemplate.id !== 'researcher' && (
               <div className="p-3 bg-muted rounded-lg border-l-4 border-primary">
                 <p className="text-sm text-muted-foreground">
-                  <strong>Template selecionado:</strong> Este template preencherá automaticamente 
+                  <strong>Template selecionado:</strong> Este template preencherá automaticamente
                   os campos com configurações otimizadas para {selectedTemplate.name.toLowerCase()}.
                 </p>
               </div>

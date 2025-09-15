@@ -64,13 +64,13 @@ export function EditProjectModal({ open, onOpenChange, project }: EditProjectMod
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Projeto</DialogTitle>
           <DialogDescription>Atualize os dados do projeto selecionado.</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Nome</Label>
               <Input value={form.name} onChange={(e) => updateField('name', e.target.value)} required />
@@ -94,7 +94,7 @@ export function EditProjectModal({ open, onOpenChange, project }: EditProjectMod
             <Textarea value={form.description} onChange={(e) => updateField('description', e.target.value)} rows={3} />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Modelo</Label>
               <Input value={form.model_name} onChange={(e) => updateField('model_name', e.target.value)} />

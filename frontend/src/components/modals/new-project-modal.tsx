@@ -108,7 +108,7 @@ export function NewProjectModal({ open, onOpenChange }: NewProjectModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
@@ -119,10 +119,10 @@ export function NewProjectModal({ open, onOpenChange }: NewProjectModalProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
           {/* Basic Info */}
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Nome do Projeto</Label>
                 <Input
@@ -134,11 +134,11 @@ export function NewProjectModal({ open, onOpenChange }: NewProjectModalProps) {
                   required
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="model_provider">Modelo de IA</Label>
-                <Select 
-                  value={formData.model_provider} 
+                <Select
+                  value={formData.model_provider}
                   onValueChange={(value) => handleInputChange('model_provider', value)}
                 >
                   <SelectTrigger>
@@ -163,7 +163,7 @@ export function NewProjectModal({ open, onOpenChange }: NewProjectModalProps) {
                 rows={3}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Idioma de saída</Label>
                 <Select value={formData.language} onValueChange={(value) => handleInputChange('language', value)}>
@@ -193,30 +193,27 @@ export function NewProjectModal({ open, onOpenChange }: NewProjectModalProps) {
           {/* Templates */}
           <div className="space-y-4">
             <Label>Template do Projeto</Label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {projectTemplates.map((template) => {
                 const Icon = template.icon;
                 const isSelected = formData.template === template.id;
-                
+
                 return (
                   <div
                     key={template.id}
-                    className={`relative p-4 border rounded-lg cursor-pointer transition-all hover:border-primary ${
-                      isSelected ? 'border-primary bg-primary/5' : 'border-border'
-                    }`}
+                    className={`relative p-4 border rounded-lg cursor-pointer transition-all hover:border-primary ${isSelected ? 'border-primary bg-primary/5' : 'border-border'
+                      }`}
                     onClick={() => handleInputChange('template', template.id)}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-lg ${
-                        isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                      }`}>
+                      <div className={`p-2 rounded-lg ${isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                        }`}>
                         <Icon className="h-4 w-4" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <h4 className={`font-medium text-sm ${
-                            isSelected ? 'text-primary' : 'text-heading'
-                          }`}>
+                          <h4 className={`font-medium text-sm ${isSelected ? 'text-primary' : 'text-heading'
+                            }`}>
                             {template.name}
                           </h4>
                           {template.badge && (
@@ -234,11 +231,11 @@ export function NewProjectModal({ open, onOpenChange }: NewProjectModalProps) {
                 );
               })}
             </div>
-            
+
             {selectedTemplate && selectedTemplate.id !== 'blank' && (
               <div className="p-3 bg-muted rounded-lg border-l-4 border-primary">
                 <p className="text-sm text-muted-foreground">
-                  <strong>Template selecionado:</strong> Este template irá configurar automaticamente 
+                  <strong>Template selecionado:</strong> Este template irá configurar automaticamente
                   agentes e tarefas no editor visual para {selectedTemplate.name.toLowerCase()}.
                 </p>
               </div>

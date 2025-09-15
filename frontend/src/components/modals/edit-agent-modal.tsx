@@ -95,13 +95,13 @@ export function EditAgentModal({ open, onOpenChange, agent, projectId }: EditAge
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Agente</DialogTitle>
           <DialogDescription>Atualize os dados do agente selecionado.</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Nome</Label>
               <Input value={form.name} onChange={(e) => updateField('name', e.target.value)} required />
@@ -125,7 +125,7 @@ export function EditAgentModal({ open, onOpenChange, agent, projectId }: EditAge
           {/* Tools Selection */}
           <div className="space-y-2">
             <Label>Ferramentas</Label>
-            <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 bg-muted rounded-md">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 sm:max-h-40 overflow-y-auto p-2 bg-muted rounded-md">
               {AVAILABLE_TOOLS.map(tool => (
                 <div key={tool} className="flex items-center gap-2 p-1 rounded">
                   <Checkbox
@@ -145,7 +145,7 @@ export function EditAgentModal({ open, onOpenChange, agent, projectId }: EditAge
           </div>
 
           {/* Advanced Options */}
-          <div className="grid grid-cols-2 gap-4 p-3 bg-muted/50 rounded-lg">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 p-3 bg-muted/50 rounded-lg">
             <div className="flex items-center gap-2">
               <Checkbox
                 id="verbose"

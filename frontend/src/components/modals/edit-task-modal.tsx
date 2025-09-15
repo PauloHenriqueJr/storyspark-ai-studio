@@ -117,7 +117,7 @@ export function EditTaskModal({ open, onOpenChange, task, projectId }: EditTaskM
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Tarefa</DialogTitle>
           <DialogDescription>Atualize os dados da tarefa selecionada.</DialogDescription>
@@ -171,7 +171,7 @@ export function EditTaskModal({ open, onOpenChange, task, projectId }: EditTaskM
           {/* Tools Selection */}
           <div className="space-y-2">
             <Label>Ferramentas</Label>
-            <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 bg-muted rounded-md">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 sm:max-h-40 overflow-y-auto p-2 bg-muted rounded-md">
               {AVAILABLE_TOOLS.map(tool => (
                 <div key={tool} className="flex items-center gap-2 p-1 rounded">
                   <Checkbox
@@ -190,7 +190,7 @@ export function EditTaskModal({ open, onOpenChange, task, projectId }: EditTaskM
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Arquivo de Saída</Label>
               <Input
