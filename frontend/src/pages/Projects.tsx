@@ -197,47 +197,48 @@ export default function Projects() {
       </AlertDialog>
 
       {/* Header */}
-      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 p-8 border border-primary/10">
+      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 p-4 sm:p-6 lg:p-8 border border-primary/10">
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-pulse" />
-        <div className="relative flex items-center justify-between">
+        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-4 lg:gap-6">
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold flex items-center gap-4">
-              <div className="p-3 bg-primary/10 rounded-xl">
-                <FolderOpen className="h-8 w-8 text-primary" />
+            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3 sm:gap-4">
+              <div className="p-2 sm:p-3 bg-primary/10 rounded-xl">
+                <FolderOpen className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
               </div>
               <span className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
                 Projetos
               </span>
             </h1>
-            <p className="text-muted-foreground text-lg">
+            <p className="text-muted-foreground text-sm sm:text-base lg:text-lg">
               Gerencie seus projetos de automação com IA • {filteredProjects.length} projeto{filteredProjects.length !== 1 ? 's' : ''} encontrado{filteredProjects.length !== 1 ? 's' : ''}
             </p>
           </div>
 
           <Button
             onClick={handleCreateProject}
-            className="btn-primary gap-3 px-6 py-3 text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group"
+            className="btn-primary gap-2 sm:gap-3 px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group self-start lg:self-center"
           >
-            <Plus className="h-5 w-5 group-hover:rotate-90 transition-transform duration-300" />
-            Novo Projeto
+            <Plus className="h-4 w-4 sm:h-5 sm:w-5 group-hover:rotate-90 transition-transform duration-300" />
+            <span className="hidden sm:inline">Novo Projeto</span>
+            <span className="sm:hidden">Novo</span>
           </Button>
         </div>
       </div>
 
       {/* Search and Filters */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+        <div className="relative flex-1 max-w-full sm:max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search projects..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 input-notion"
+            className="pl-10 input-notion h-10"
           />
         </div>
-        <Button variant="outline" className="gap-2">
+        <Button variant="outline" className="gap-2 h-10 justify-center sm:justify-start">
           <Filter className="h-4 w-4" />
-          Filter
+          <span className="hidden sm:inline">Filter</span>
         </Button>
       </div>
 
@@ -250,24 +251,24 @@ export default function Projects() {
       )}
 
       {/* Projects Grid */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
         {filteredProjects.map((project: any) => (
           <Card key={project.id} className="group relative overflow-hidden border-0 bg-gradient-to-br from-card via-card to-card/50 hover:from-card hover:to-primary/5 transition-all duration-300 hover:shadow-xl hover:shadow-primary/10 hover:-translate-y-1">
             {/* Decorative gradient border */}
             <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-transparent to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg" />
 
-            <CardHeader className="pb-4 relative">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 space-y-2">
-                  <CardTitle className="text-lg flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors duration-300">
-                      <FolderOpen className="h-5 w-5 text-primary" />
+            <CardHeader className="pb-3 sm:pb-4 relative">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 space-y-2 min-w-0">
+                  <CardTitle className="text-base sm:text-lg flex items-center gap-2 sm:gap-3">
+                    <div className="p-1.5 sm:p-2 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors duration-300 flex-shrink-0">
+                      <FolderOpen className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                     </div>
-                    <span className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text group-hover:from-primary group-hover:to-primary/80 transition-all duration-300">
+                    <span className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text group-hover:from-primary group-hover:to-primary/80 transition-all duration-300 truncate">
                       {project.name}
                     </span>
                   </CardTitle>
-                  <CardDescription className="text-sm leading-relaxed group-hover:text-foreground/80 transition-colors">
+                  <CardDescription className="text-xs sm:text-sm leading-relaxed group-hover:text-foreground/80 transition-colors line-clamp-2">
                     {project.description}
                   </CardDescription>
                 </div>
@@ -337,17 +338,17 @@ export default function Projects() {
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/10 rounded-lg">
-                    <Users className="h-4 w-4 text-blue-600" />
-                    <div>
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                  <div className="flex items-center gap-2 px-2 sm:px-3 py-2 bg-blue-500/10 rounded-lg">
+                    <Users className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                    <div className="min-w-0">
                       <div className="text-sm font-semibold text-blue-700">{(project.agents_count ?? 0)}</div>
                       <div className="text-xs text-blue-600/80">agentes</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 rounded-lg">
-                    <CheckSquare className="h-4 w-4 text-green-600" />
-                    <div>
+                  <div className="flex items-center gap-2 px-2 sm:px-3 py-2 bg-green-500/10 rounded-lg">
+                    <CheckSquare className="h-4 w-4 text-green-600 flex-shrink-0" />
+                    <div className="min-w-0">
                       <div className="text-sm font-semibold text-green-700">{(project.tasks_count ?? 0)}</div>
                       <div className="text-xs text-green-600/80">tasks</div>
                     </div>
@@ -355,16 +356,16 @@ export default function Projects() {
                 </div>
 
                 {/* Last Execution */}
-                <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-full">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs sm:text-sm">
+                  <div className="flex items-center gap-2 px-2 sm:px-3 py-1.5 bg-muted/50 rounded-full min-w-0 flex-1">
+                    <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <span className="text-muted-foreground truncate">
                       Última execução: {project.last_execution_at ? new Date(project.last_execution_at).toLocaleDateString() : 'Nunca'}
                     </span>
                   </div>
                   <Badge
                     variant={(project.executions_count ?? 0) > 0 ? 'default' : 'secondary'}
-                    className="gap-1.5 bg-gradient-to-r from-primary/10 to-primary/5 hover:from-primary/20 hover:to-primary/10 transition-all duration-200"
+                    className="gap-1.5 bg-gradient-to-r from-primary/10 to-primary/5 hover:from-primary/20 hover:to-primary/10 transition-all duration-200 text-xs px-2 py-1 self-start sm:self-center flex-shrink-0"
                   >
                     {(project.executions_count ?? 0)} execuções
                   </Badge>
@@ -387,21 +388,21 @@ export default function Projects() {
 
         {/* Empty State */}
         {filteredProjects.length === 0 && (
-          <div className="col-span-full text-center py-16">
-            <div className="relative mb-6">
-              <div className="w-24 h-24 bg-gradient-to-br from-primary/20 to-primary/5 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FolderOpen className="h-12 w-12 text-primary/60" />
+          <div className="col-span-full text-center py-8 sm:py-12 lg:py-16">
+            <div className="relative mb-4 sm:mb-6">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 bg-gradient-to-br from-primary/20 to-primary/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FolderOpen className="h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12 text-primary/60" />
               </div>
-              <div className="absolute -top-2 -right-2 w-8 h-8 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center animate-bounce">
-                <Plus className="h-4 w-4 text-white" />
+              <div className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center animate-bounce">
+                <Plus className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
               </div>
             </div>
 
-            <h3 className="text-2xl font-bold mb-3 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+            <h3 className="text-xl sm:text-2xl font-bold mb-3 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
               {searchTerm ? 'Nenhum projeto encontrado' : 'Comece criando seu primeiro projeto'}
             </h3>
 
-            <p className="text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
+            <p className="text-muted-foreground mb-6 sm:mb-8 max-w-md mx-auto leading-relaxed text-sm sm:text-base px-4">
               {searchTerm
                 ? 'Tente ajustar os termos da sua busca ou remova os filtros para ver todos os projetos disponíveis.'
                 : 'Projetos são containers para seus agentes e tarefas de IA. Organize seu trabalho em projetos estruturados.'
@@ -412,9 +413,9 @@ export default function Projects() {
               <div className="space-y-4">
                 <Button
                   onClick={handleCreateProject}
-                  className="btn-primary gap-3 px-8 py-3 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                  className="btn-primary gap-2 sm:gap-3 px-6 sm:px-8 py-2 sm:py-3 text-sm sm:text-base lg:text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
                 >
-                  <Plus className="h-5 w-5" />
+                  <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
                   Criar Primeiro Projeto
                 </Button>
 

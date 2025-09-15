@@ -307,7 +307,7 @@ export default function Tasks() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* New Task Modal */}
       <NewTaskModal
         open={isCreateDialogOpen}
@@ -343,31 +343,34 @@ export default function Tasks() {
       </AlertDialog>
 
       {/* Header */}
-      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 p-8 border border-primary/10">
+      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 p-4 sm:p-6 lg:p-8 border border-primary/10">
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-pulse" />
-        <div className="relative flex items-center justify-between">
+        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold flex items-center gap-4">
-              <div className="p-3 bg-primary/10 rounded-xl">
-                <CheckSquare className="h-8 w-8 text-primary" />
+            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3 sm:gap-4">
+              <div className="p-2 sm:p-3 bg-primary/10 rounded-xl">
+                <CheckSquare className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
               </div>
               <span className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
                 Tasks
               </span>
             </h1>
-            <p className="text-muted-foreground text-lg">
+            <p className="text-muted-foreground text-sm sm:text-base lg:text-lg">
               Gerencie as tarefas dos seus agentes criativos • {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''} encontrado{filteredTasks.length !== 1 ? 's' : ''}
             </p>
           </div>
 
-          <Button
-            onClick={() => setIsCreateDialogOpen(true)}
-            disabled={!selectedProjectId}
-            className="btn-primary gap-3 px-6 py-3 text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group"
-          >
-            <Plus className="h-5 w-5 group-hover:rotate-90 transition-transform duration-300" />
-            Nova Task
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2 lg:gap-4 self-start lg:self-center">
+            <Button
+              onClick={() => setIsCreateDialogOpen(true)}
+              disabled={!selectedProjectId}
+              className="btn-primary gap-2 sm:gap-3 px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group self-start sm:self-center"
+            >
+              <Plus className="h-4 w-4 sm:h-5 sm:w-5 group-hover:rotate-90 transition-transform duration-300" />
+              <span className="hidden sm:inline">Nova Task</span>
+              <span className="sm:hidden">Nova</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -381,31 +384,32 @@ export default function Tasks() {
 
           {(projects as any[]).length <= 6 ? (
             // Layout horizontal para poucos projetos
-            <div className="flex gap-3 overflow-x-auto pb-2 px-1 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
+            <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 px-1 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
               {(projects as any[]).map((project: any) => (
                 <button
                   key={project.id}
                   onClick={() => setSelectedProjectId(String(project.id))}
-                  className={`flex-shrink-0 px-4 py-3 rounded-xl border-2 transition-all duration-200 hover:shadow-lg hover:shadow-primary/10 ${selectedProjectId === String(project.id)
+                  className={`flex-shrink-0 px-3 sm:px-4 py-2 sm:py-3 rounded-lg sm:rounded-xl border-2 transition-all duration-200 hover:shadow-lg hover:shadow-primary/10 text-sm ${selectedProjectId === String(project.id)
                     ? 'border-primary bg-primary/5 shadow-md shadow-primary/20'
                     : 'border-border hover:border-primary/50 bg-card hover:bg-primary/5'
                     }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full transition-all duration-200 ${selectedProjectId === String(project.id)
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full transition-all duration-200 ${selectedProjectId === String(project.id)
                       ? 'bg-primary animate-pulse'
                       : 'bg-muted-foreground/50 hover:bg-primary/70'
                       }`} />
-                    <div className="text-left">
-                      <div className={`text-sm font-medium transition-colors duration-200 ${selectedProjectId === String(project.id)
+                    <div className="text-left min-w-0">
+                      <div className={`text-xs sm:text-sm font-medium transition-colors duration-200 truncate ${selectedProjectId === String(project.id)
                         ? 'text-primary'
                         : 'text-foreground hover:text-primary'
                         }`}>
                         {project.name}
                       </div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-2">
+                      <div className="text-xs text-muted-foreground flex items-center gap-1 sm:gap-2">
                         <CheckSquare className="h-3 w-3" />
-                        {project.tasks_count || 0} tasks
+                        <span className="hidden sm:inline">{project.tasks_count || 0} tasks</span>
+                        <span className="sm:hidden">{project.tasks_count || 0}</span>
                       </div>
                     </div>
                   </div>
@@ -423,8 +427,8 @@ export default function Tasks() {
                   <div className="p-2 bg-primary/10 rounded-lg">
                     <FolderOpen className="h-4 w-4 text-primary" />
                   </div>
-                  <div className="text-left">
-                    <div className="text-sm font-medium text-foreground">
+                  <div className="text-left min-w-0 flex-1">
+                    <div className="text-sm font-medium text-foreground truncate">
                       {(projects as any[]).find((p: any) => String(p.id) === selectedProjectId)?.name || 'Selecionar projeto'}
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -432,7 +436,7 @@ export default function Tasks() {
                     </div>
                   </div>
                 </div>
-                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${isProjectDropdownOpen ? 'rotate-180' : ''
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 flex-shrink-0 ${isProjectDropdownOpen ? 'rotate-180' : ''
                   }`} />
               </button>
 
@@ -453,7 +457,7 @@ export default function Tasks() {
                           ? 'bg-primary animate-pulse'
                           : 'bg-muted-foreground/50'
                           }`} />
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <div className={`text-sm font-medium ${selectedProjectId === String(project.id) ? 'text-primary' : 'text-foreground'
                             }`}>
                             {project.name}
@@ -474,24 +478,24 @@ export default function Tasks() {
       )}
 
       {/* Search and Filters */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+        <div className="relative flex-1 max-w-full sm:max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             placeholder="Buscar tasks..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 input-notion"
+            className="pl-10 h-10 input-notion"
           />
         </div>
-        <Button variant="outline" className="gap-2">
+        <Button variant="outline" className="gap-2 h-10 justify-center sm:justify-start">
           <Filter className="h-4 w-4" />
-          Filtros
+          <span className="hidden sm:inline">Filtros</span>
         </Button>
       </div>
 
       {/* Tasks Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
         {filteredTasks.map((task: any) => {
           const project = (projects as any[]).find(p => p.id === task.project_id);
           const agent = (allAgents as any[]).find(a => a.id === task.agent_id);
@@ -501,37 +505,40 @@ export default function Tasks() {
               {/* Decorative gradient border */}
               <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-transparent to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg" />
 
-              <CardHeader className="pb-4 relative">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 space-y-2">
-                    <CardTitle className="text-lg flex items-center gap-3">
+              <CardHeader className="pb-3 sm:pb-4 relative">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                    <div className="relative flex-shrink-0">
                       <div className="p-2 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors duration-300">
                         <Target className="h-5 w-5 text-primary" />
                       </div>
-                      <span className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text group-hover:from-primary group-hover:to-primary/80 transition-all duration-300">
-                        Task #{task.id}
-                      </span>
-                    </CardTitle>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <User className="h-3 w-3" />
-                        <span>{agent?.name}</span>
-                      </div>
-                      <div className="w-1 h-1 bg-muted-foreground/50 rounded-full"></div>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <FolderOpen className="h-3 w-3" />
-                        <span>{project?.name}</span>
-                      </div>
-                      {recentlyDuplicated.has(task.id) && (
-                        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 animate-pulse">
-                          <Copy className="h-3 w-3 mr-1" />
-                          Duplicada
-                        </Badge>
-                      )}
                     </div>
-                    <CardDescription className="text-sm leading-relaxed group-hover:text-foreground/80 transition-colors">
-                      {task.description}
-                    </CardDescription>
+
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <CardTitle className="text-base sm:text-lg font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text group-hover:from-primary group-hover:to-primary/80 transition-all duration-300 truncate">
+                        Task #{task.id}
+                      </CardTitle>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <User className="h-3 w-3 flex-shrink-0" />
+                          <span className="truncate">{agent?.name}</span>
+                        </div>
+                        <div className="hidden sm:block w-1 h-1 bg-muted-foreground/50 rounded-full flex-shrink-0"></div>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <FolderOpen className="h-3 w-3 flex-shrink-0" />
+                          <span className="truncate">{project?.name}</span>
+                        </div>
+                        {recentlyDuplicated.has(task.id) && (
+                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 animate-pulse flex-shrink-0">
+                            <Copy className="h-3 w-3 mr-1" />
+                            Duplicada
+                          </Badge>
+                        )}
+                      </div>
+                      <CardDescription className="text-xs sm:text-sm leading-relaxed group-hover:text-foreground/80 transition-colors line-clamp-2">
+                        {task.description}
+                      </CardDescription>
+                    </div>
                   </div>
 
                   <DropdownMenu>
@@ -539,7 +546,7 @@ export default function Tasks() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-primary/10 hover:text-primary"
+                        className="opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-primary/10 hover:text-primary flex-shrink-0"
                       >
                         <MoreVertical className="h-4 w-4" />
                       </Button>
@@ -570,16 +577,16 @@ export default function Tasks() {
                 </div>
               </CardHeader>
 
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3 sm:space-y-4">
                 {/* Expected Output */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-primary/10 rounded-md">
+                    <div className="p-1.5 bg-primary/10 rounded-md flex-shrink-0">
                       <FileText className="h-4 w-4 text-primary" />
                     </div>
-                    <h4 className="font-semibold text-sm text-foreground/80">Resultado Esperado</h4>
+                    <h4 className="font-semibold text-xs sm:text-sm text-foreground/80">Resultado Esperado</h4>
                   </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed pl-7 line-clamp-2 group-hover:text-foreground/80 transition-colors">
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed pl-7 line-clamp-2 group-hover:text-foreground/80 transition-colors">
                     {task.expected_output}
                   </p>
                 </div>
@@ -588,7 +595,7 @@ export default function Tasks() {
                 <div className="space-y-3">
                   {task.tools && task.tools.length > 0 && (
                     <div className="flex items-center gap-2 px-3 py-2 bg-primary/10 rounded-lg">
-                      <Settings className="h-4 w-4 text-primary" />
+                      <Settings className="h-4 w-4 text-primary flex-shrink-0" />
                       <div>
                         <div className="text-sm font-semibold text-primary">{task.tools.length}</div>
                         <div className="text-xs text-primary/80">ferramentas</div>
@@ -596,15 +603,15 @@ export default function Tasks() {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-full">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">
+                      <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-xs sm:text-sm text-muted-foreground">
                         {task.async_execution ? 'Assíncrono' : 'Síncrono'}
                       </span>
                     </div>
                     {task.output_file && (
-                      <Badge variant="secondary" className="gap-1.5 bg-gradient-to-r from-primary/10 to-primary/5 hover:from-primary/20 hover:to-primary/10 transition-all duration-200">
+                      <Badge variant="secondary" className="gap-1.5 bg-gradient-to-r from-primary/10 to-primary/5 hover:from-primary/20 hover:to-primary/10 transition-all duration-200 text-xs flex-shrink-0">
                         <FileText className="h-3 w-3" />
                         {task.output_file}
                       </Badge>
@@ -613,11 +620,11 @@ export default function Tasks() {
                 </div>
 
                 {/* Action buttons */}
-                <div className="flex gap-2 pt-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+                <div className="flex flex-col sm:flex-row gap-2 pt-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
                   <Button
                     size="sm"
                     variant="outline"
-                    className="flex-1 gap-1.5 hover:bg-primary hover:text-primary-foreground transition-all duration-200"
+                    className="flex-1 gap-1.5 hover:bg-primary hover:text-primary-foreground transition-all duration-200 text-xs sm:text-sm"
                     onClick={() => handleTaskAction('run', task.id)}
                     disabled={executingTasks.has(task.id)}
                   >
@@ -636,7 +643,7 @@ export default function Tasks() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="flex-1 gap-1.5 hover:bg-blue-500 hover:text-white transition-all duration-200"
+                    className="flex-1 gap-1.5 hover:bg-blue-500 hover:text-white transition-all duration-200 text-xs sm:text-sm"
                     onClick={() => handleTaskAction('edit', task.id)}
                   >
                     <Edit className="h-3 w-3" />
@@ -651,23 +658,58 @@ export default function Tasks() {
 
       {/* Empty State */}
       {filteredTasks.length === 0 && !tasksLoading && (
-        <div className="text-center py-12">
-          <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-foreground mb-2">Nenhuma task encontrada</h3>
-          <p className="text-muted-foreground mb-4">
-            {searchTerm ? 'Tente ajustar os filtros de busca' : 'Crie sua primeira task para começar'}
+        <div className="text-center py-8 sm:py-12 lg:py-16">
+          <div className="relative mb-4 sm:mb-6">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 bg-gradient-to-br from-primary/20 to-primary/5 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckSquare className="h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:h-12 text-primary/60" />
+            </div>
+            <div className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center animate-bounce">
+              <Plus className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
+            </div>
+          </div>
+
+          <h3 className="text-xl sm:text-2xl font-bold mb-3 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+            {searchTerm ? 'Nenhuma task encontrada' : 'Comece criando sua primeira task'}
+          </h3>
+
+          <p className="text-muted-foreground mb-6 sm:mb-8 max-w-md mx-auto leading-relaxed text-sm sm:text-base px-4">
+            {searchTerm
+              ? 'Tente ajustar os termos da sua busca ou remova os filtros para ver todas as tasks disponíveis.'
+              : 'Tasks são as unidades de trabalho que seus agentes executam. Cada task tem um objetivo claro e pode usar ferramentas específicas.'
+            }
           </p>
+
           {!searchTerm && (
-            <Button onClick={() => setIsCreateDialogOpen(true)} className="btn-primary gap-2">
-              <Plus className="h-4 w-4" />
-              Criar Primeira Task
-            </Button>
+            <div className="space-y-4">
+              <Button
+                onClick={() => setIsCreateDialogOpen(true)}
+                className="btn-primary gap-2 sm:gap-3 px-6 sm:px-8 py-2 sm:py-3 text-sm sm:text-base lg:text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+              >
+                <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+                Criar Primeira Task
+              </Button>
+
+              <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 text-xs sm:text-sm text-muted-foreground px-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-primary rounded-full"></div>
+                  <span>Defina objetivos claros</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span>Configure ferramentas</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span>Atribua aos agentes</span>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}
 
       {/* Stats Footer */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-6 border-t">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-6 border-t">
         <div className="text-center">
           <div className="text-2xl font-semibold text-heading">{(allTasks as any[]).length}</div>
           <div className="text-sm text-muted-foreground">Total de Tasks</div>

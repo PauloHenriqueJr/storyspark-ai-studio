@@ -19,7 +19,7 @@ export default function Run() {
   const location = useLocation();
   const { toast } = useToast();
   const [selectedProject, setSelectedProject] = useState<string>('');
-  const [language, setLanguage] = useState<'pt'|'en'|'es'|'fr'>('pt');
+  const [language, setLanguage] = useState<'pt' | 'en' | 'es' | 'fr'>('pt');
   const [inputData, setInputData] = useState<string>('{}');
   const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
@@ -66,10 +66,10 @@ export default function Run() {
         const example: Record<string, string> = {};
         const defaults: Record<string, string> = { topic: 'IA', industry: 'tecnologia', platform: 'Instagram' };
         vars.forEach(v => { example[v] = defaults[v] || 'exemplo'; });
-        if (Object.keys(example).length && (!inputData || inputData.trim() === '{}' )) {
+        if (Object.keys(example).length && (!inputData || inputData.trim() === '{}')) {
           setInputData(JSON.stringify(example, null, 2));
         }
-      } catch {}
+      } catch { }
     };
     load();
   }, [selectedProject]);
@@ -79,11 +79,11 @@ export default function Run() {
       toast({ title: 'Projeto necessário', description: 'Selecione um projeto', variant: 'destructive' });
       return;
     }
-  
+
     try {
       let parsedInput: any = {};
       if (inputData.trim()) parsedInput = JSON.parse(inputData);
-  
+
       // Start execution (returns running execution with id)
       const started = await apiClient.run.project(Number(selectedProject), { inputs: parsedInput, language }) as Execution;
       if (!started || !started.id) {
@@ -146,7 +146,7 @@ export default function Run() {
       default: return <Badge variant="secondary">N/A</Badge>;
     }
   };
-  
+
   const executionQuery = useQuery<Execution, Error>({
     queryKey: ['execution', currentExecutionId],
     queryFn: () => currentExecutionId ? apiClient.executions.get(Number(currentExecutionId)) as Promise<Execution> : Promise.reject(new Error('No execution ID')),
@@ -155,7 +155,7 @@ export default function Run() {
     refetchIntervalInBackground: true,
     retry: 3,
   });
-  
+
   // Handle query errors
   useEffect(() => {
     if (executionQuery.error) {
@@ -166,11 +166,11 @@ export default function Run() {
       });
     }
   }, [executionQuery.error, toast]);
-  
+
   const currentExecution: Execution | null = executionQuery.data ?? null;
   const isRunning = currentExecution?.status === 'running';
   const queryError = executionQuery.error;
-  
+
   // Toast on status change (replaces onSuccess)
   useEffect(() => {
     if (currentExecution && !isRunning) {
@@ -180,7 +180,7 @@ export default function Run() {
       const projectName = projectOptions?.find((p: any) => String(p.id) === selectedProject)?.name;
       const agentName = agents?.find((a: any) => String(a.id) === (currentExecution.agent_id || ''))?.name;
       const taskDesc = tasks?.find((t: any) => String(t.id) === (currentExecution.task_id || ''))?.description?.slice(0, 50);
-      
+
       switch (currentExecution.status) {
         case 'completed':
           title = 'Execução concluída';
@@ -204,7 +204,7 @@ export default function Run() {
       }
     }
   }, [currentExecution?.status, projectOptions, agents, tasks, selectedProject, toast, queryClient]);
-  
+
   // Update progress based on status
   useEffect(() => {
     if (currentExecution) {
@@ -219,115 +219,124 @@ export default function Run() {
   }, [currentExecution?.status, currentExecutionId]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-title flex items-center gap-3">
-          <Activity className="h-7 w-7 text-primary" />
+    <div className="space-y-6 lg:space-y-8">
+      {/* Header Section */}
+      <div className="text-center space-y-2 px-4">
+        <h1 className="text-2xl sm:text-3xl font-bold flex items-center justify-center gap-2 sm:gap-3">
+          <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
           Executar Projetos
         </h1>
-        <p className="text-muted-foreground">Execute seus projetos e visualize logs e resultados</p>
+        <p className="text-muted-foreground text-sm sm:text-lg">Execute seus projetos e visualize logs e resultados em tempo real</p>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className="space-y-6">
-          <Card className="card-notion">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" /> Configuração
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-8">
+        <div className="xl:col-span-2 space-y-4 lg:space-y-6">
+          <Card className="card-notion border-2 border-primary/10">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 sm:gap-3 text-lg sm:text-xl">
+                <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+                Configuração do Projeto
               </CardTitle>
-              <CardDescription>Selecione o projeto e os parâmetros</CardDescription>
+              <CardDescription className="text-sm sm:text-base">Selecione o projeto e configure os parâmetros de execução</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 lg:space-y-6">
               <div className="space-y-2">
-                <Label>Projeto</Label>
+                <Label className="text-sm font-semibold">Projeto</Label>
                 <select
-                  className="w-full p-3 border border-border rounded-radius bg-input"
+                  className="w-full p-3 sm:p-4 border-2 border-border rounded-lg bg-background hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors text-sm sm:text-base"
                   value={selectedProject}
                   onChange={(e) => setSelectedProject(e.target.value)}
                   disabled={loadingProjects || !projectOptions.length}
                 >
-                  {!projectOptions.length && <option value="">Carregando...</option>}
+                  {!projectOptions.length && <option value="">Carregando projetos...</option>}
                   {projectOptions.map((p: any) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="space-y-2">
-                  <Label>Idioma</Label>
-                  <select className="w-full p-3 border border-border rounded-radius bg-input" value={language} onChange={(e) => setLanguage(e.target.value as any)}>
-                    <option value="pt">Português</option>
-                    <option value="en">English</option>
-                    <option value="es">Español</option>
-                    <option value="fr">Français</option>
+                  <Label className="text-sm font-semibold">Idioma de Saída</Label>
+                  <select className="w-full p-3 sm:p-4 border-2 border-border rounded-lg bg-background hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors text-sm sm:text-base" value={language} onChange={(e) => setLanguage(e.target.value as any)}>
+                    <option value="pt">🇧🇷 Português</option>
+                    <option value="en">🇺🇸 English</option>
+                    <option value="es">🇪🇸 Español</option>
+                    <option value="fr">🇫🇷 Français</option>
                   </select>
-        </div>
-      </div>
-
-      {/* Simple task status grid */}
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold flex items-center gap-2"><Zap className="h-5 w-5" /> Status das Tasks</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {tasks.map((t: any) => {
-            const status = currentExecution?.status === 'running' ? 'running' : (currentExecution?.status || 'idle');
-            const color = status === 'completed' ? 'bg-accent-green/10 text-accent-green' : status === 'running' ? 'bg-accent-yellow/10 text-accent-yellow' : status === 'error' ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground';
-            return (
-              <div key={t.id} className={`p-3 rounded-radius border ${color}`}>
-                <div className="text-sm font-medium">Task #{t.id}</div>
-                <div className="text-xs opacity-80">{t.description?.slice(0, 60)}{t.description?.length>60?'...':''}</div>
-                <div className="mt-2 text-xs">Status: {status}</div>
+                </div>
+              </div>      {/* Simple task status grid */}
+              <div className="space-y-3">
+                <h2 className="text-lg font-semibold flex items-center gap-2"><Zap className="h-5 w-5" /> Status das Tasks</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {tasks.map((t: any) => {
+                    const status = currentExecution?.status === 'running' ? 'running' : (currentExecution?.status || 'idle');
+                    const color = status === 'completed' ? 'bg-accent-green/10 text-accent-green border-accent-green/20' : status === 'running' ? 'bg-accent-yellow/10 text-accent-yellow border-accent-yellow/20' : status === 'error' ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-muted text-muted-foreground border-border';
+                    return (
+                      <div key={t.id} className={`p-3 rounded-lg border ${color} transition-all duration-200 hover:shadow-sm`}>
+                        <div className="text-sm font-medium mb-1">Task #{t.id}</div>
+                        <div className="text-xs opacity-80 mb-2 line-clamp-2">{t.description?.slice(0, 60)}{t.description?.length > 60 ? '...' : ''}</div>
+                        <div className="text-xs font-medium">Status: {status}</div>
+                      </div>
+                    );
+                  })}
+                  {tasks.length === 0 && (
+                    <div className="col-span-full text-center py-8 text-muted-foreground">
+                      <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <div className="text-sm">Nenhuma task no projeto selecionado.</div>
+                    </div>
+                  )}
+                </div>
               </div>
-            );
-          })}
-          {tasks.length === 0 && (
-            <div className="text-sm text-muted-foreground">Nenhuma task no projeto selecionado.</div>
-          )}
-        </div>
-      </div>
 
-      {/* Agent and Task execution sections */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card className="card-notion">
-          <CardHeader>
-            <CardTitle>Executar Agente</CardTitle>
-            <CardDescription>Escolha um agente do projeto e execute suas tasks</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Agente</Label>
-              <select className="w-full p-2 border rounded" value={selectedAgent} onChange={(e) => setSelectedAgent(e.target.value)}>
-                {agents.map((a: any) => (<option key={a.id} value={a.id}>{a.name}</option>))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label>Parâmetros (JSON)</Label>
-              <Textarea value={agentInput} onChange={(e) => setAgentInput(e.target.value)} className="min-h-[120px] font-mono text-sm" />
-            </div>
-            <Button onClick={runAgent} disabled={!selectedAgent || isRunning} className="btn-primary">Executar Agente</Button>
-          </CardContent>
-        </Card>
+              {/* Agent and Task execution sections */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6 xl:gap-8">
+                <Card className="card-notion">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Executar Agente</CardTitle>
+                    <CardDescription className="text-sm">Escolha um agente do projeto e execute suas tasks</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Agente</Label>
+                      <select className="w-full p-3 border-2 border-border rounded-lg bg-background hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors text-sm" value={selectedAgent} onChange={(e) => setSelectedAgent(e.target.value)}>
+                        <option value="">Selecione um agente...</option>
+                        {agents.map((a: any) => (<option key={a.id} value={a.id}>{a.name}</option>))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Parâmetros (JSON)</Label>
+                      <Textarea value={agentInput} onChange={(e) => setAgentInput(e.target.value)} className="min-h-[120px] font-mono text-sm resize-none" placeholder='{"input": "valor"}' />
+                    </div>
+                    <Button onClick={runAgent} disabled={!selectedAgent || isRunning} className="w-full btn-primary h-11 text-sm font-medium">
+                      <Play className="h-4 w-4 mr-2" /> Executar Agente
+                    </Button>
+                  </CardContent>
+                </Card>
 
-        <Card className="card-notion">
-          <CardHeader>
-            <CardTitle>Executar Task</CardTitle>
-            <CardDescription>Execute uma task específica do projeto</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Task</Label>
-              <select className="w-full p-2 border rounded" value={selectedTask} onChange={(e) => setSelectedTask(e.target.value)}>
-                {tasks.map((t: any) => (<option key={t.id} value={t.id}>#{t.id} - {t.description?.slice(0,40)}...</option>))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label>Parâmetros (JSON)</Label>
-              <Textarea value={taskInput} onChange={(e) => setTaskInput(e.target.value)} className="min-h-[120px] font-mono text-sm" />
-            </div>
-            <Button onClick={runTask} disabled={!selectedTask || isRunning} variant="outline">Executar Task</Button>
-          </CardContent>
-        </Card>
-      </div>
+                <Card className="card-notion">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Executar Task</CardTitle>
+                    <CardDescription className="text-sm">Execute uma task específica do projeto</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Task</Label>
+                      <select className="w-full p-3 border-2 border-border rounded-lg bg-background hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors text-sm" value={selectedTask} onChange={(e) => setSelectedTask(e.target.value)}>
+                        <option value="">Selecione uma task...</option>
+                        {tasks.map((t: any) => (<option key={t.id} value={t.id}>#{t.id} - {t.description?.slice(0, 40)}...</option>))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Parâmetros (JSON)</Label>
+                      <Textarea value={taskInput} onChange={(e) => setTaskInput(e.target.value)} className="min-h-[120px] font-mono text-sm resize-none" placeholder='{"input": "valor"}' />
+                    </div>
+                    <Button onClick={runTask} disabled={!selectedTask || isRunning} variant="outline" className="w-full h-11 text-sm font-medium">
+                      <Play className="h-4 w-4 mr-2" /> Executar Task
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
 
               <div className="space-y-2">
                 <Label>Parâmetros (JSON)</Label>
@@ -337,29 +346,29 @@ export default function Run() {
           </Card>
 
           <Card className="card-notion">
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               {!isRunning ? (
-                <Button onClick={handleRunProject} disabled={!selectedProject || executionQuery.isFetching} className="w-full btn-primary gap-2 h-12 text-base">
-                  <Play className="h-5 w-5" /> Executar Projeto
+                <Button onClick={handleRunProject} disabled={!selectedProject || executionQuery.isFetching} className="w-full btn-primary gap-2 h-12 text-base font-medium">
+                  <Play className="h-5 w-5" /> Executar Projeto Completo
                 </Button>
               ) : (
                 <div className="space-y-4">
-                  <Button onClick={handleStop} variant="destructive" className="w-full gap-2 h-12 text-base" disabled={executionQuery.isFetching}>
+                  <Button onClick={handleStop} variant="destructive" className="w-full gap-2 h-12 text-base font-medium" disabled={executionQuery.isFetching}>
                     <Square className="h-5 w-5" /> Parar Execução
                   </Button>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Progresso</span>
+                      <span className="text-muted-foreground font-medium">Progresso</span>
                       <span className="text-muted-foreground">
                         {currentExecution?.status === 'running' ? 'Em andamento...' : `${progress}%`}
                       </span>
                     </div>
-                    <Progress value={currentExecution?.status === 'running' ? undefined : progress} className="h-2" />
+                    <Progress value={currentExecution?.status === 'running' ? undefined : progress} className="h-3" />
                   </div>
                   {queryError && (
                     <Alert className="border-destructive">
                       <XCircle className="h-4 w-4 text-destructive" />
-                      <AlertDescription className="text-destructive">
+                      <AlertDescription className="text-destructive text-sm">
                         Erro de conexão: {queryError.message}. Tentando reconectar...
                       </AlertDescription>
                     </Alert>
@@ -370,32 +379,43 @@ export default function Run() {
           </Card>
         </div>
 
-        <div className="space-y-6">
+        <div className="lg:col-span-1 xl:col-span-2 space-y-4 lg:space-y-6 xl:space-y-8">
           {currentExecution ? (
             <>
               <Card className="card-notion">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-lg">
                     {getStatusBadge(currentExecution.status)}
                     <span className="text-sm text-muted-foreground">ID: {currentExecution.id}</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3 text-sm">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Projeto:</span><span className="font-medium">{(currentExecution as any).project_name || selectedProject}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Início:</span><span>{new Date(currentExecution.created_at).toLocaleString()}</span></div>
-                    {currentExecution.execution_time && <div className="flex justify-between"><span className="text-muted-foreground">Duração:</span><span>{currentExecution.execution_time}s</span></div>}
+                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                      <span className="text-muted-foreground">Projeto:</span>
+                      <span className="font-medium break-all">{(currentExecution as any).project_name || selectedProject}</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                      <span className="text-muted-foreground">Início:</span>
+                      <span className="break-all">{new Date(currentExecution.created_at).toLocaleString()}</span>
+                    </div>
+                    {currentExecution.execution_time && (
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                        <span className="text-muted-foreground">Duração:</span>
+                        <span>{currentExecution.execution_time}s</span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
-          
+
               {currentExecution.output_payload?.result && (
                 <Card className="card-notion">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Zap className="h-5 w-5" /> Resultado</CardTitle>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-lg"><Zap className="h-5 w-5" /> Resultado</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <pre className="bg-muted/30 p-4 rounded-radius text-xs overflow-x-auto font-mono whitespace-pre-wrap">
+                    <pre className="bg-muted/30 p-3 sm:p-4 rounded-lg text-xs overflow-x-auto font-mono whitespace-pre-wrap max-h-64 overflow-y-auto">
                       {typeof currentExecution.output_payload.result === 'string'
                         ? currentExecution.output_payload.result
                         : JSON.stringify(currentExecution.output_payload.result, null, 2)}
@@ -403,20 +423,20 @@ export default function Run() {
                   </CardContent>
                 </Card>
               )}
-          
+
               {currentExecution.logs && currentExecution.logs.trim() && (
                 <Card className="card-notion">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" /> Logs</CardTitle>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-lg"><FileText className="h-5 w-5" /> Logs</CardTitle>
                   </CardHeader>
-                  <CardContent className="max-h-96 overflow-y-auto">
-                    <pre className="bg-muted/30 p-4 rounded-radius text-xs overflow-x-auto font-mono whitespace-pre-wrap">
+                  <CardContent className="max-h-64 sm:max-h-96 overflow-y-auto">
+                    <pre className="bg-muted/30 p-3 sm:p-4 rounded-lg text-xs overflow-x-auto font-mono whitespace-pre-wrap">
                       {currentExecution.logs}
                     </pre>
                   </CardContent>
                 </Card>
               )}
-          
+
               {currentExecution.error_message && (
                 <Alert className="border-destructive">
                   <XCircle className="h-4 w-4 text-destructive" />
@@ -428,9 +448,9 @@ export default function Run() {
             </>
           ) : (
             <Card className="card-notion">
-              <CardContent className="p-8 text-center">
+              <CardContent className="p-6 sm:p-8 text-center">
                 <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="font-semibold mb-2">Nenhuma execução em andamento</h3>
+                <h3 className="font-semibold mb-2 text-base sm:text-lg">Nenhuma execução em andamento</h3>
                 <p className="text-muted-foreground text-sm">Execute um projeto, agente ou task para ver logs e resultados em tempo real</p>
               </CardContent>
             </Card>
