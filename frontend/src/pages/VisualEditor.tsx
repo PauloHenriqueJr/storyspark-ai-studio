@@ -1139,6 +1139,56 @@ function VisualEditorContent() {
             </div>
           </div>
         )}
+        {/* Selection Panel */}
+        {selectedNodes.size > 0 && (
+          <Panel position="top-center" className="bg-blue-100 dark:bg-blue-900 rounded-lg shadow-lg border border-blue-300 dark:border-blue-700 m-4 p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                  <CheckSquare className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                    {selectedNodes.size} nó{selectedNodes.size > 1 ? 's' : ''} selecionado{selectedNodes.size > 1 ? 's' : ''}
+                  </div>
+                  <div className="text-xs text-blue-600 dark:text-blue-300">
+                    {(() => {
+                      const selectedNodesList = Array.from(selectedNodes);
+                      const agents = selectedNodesList.filter(id => nodes.find(n => n.id === id)?.type === 'agent').length;
+                      const tasks = selectedNodesList.filter(id => nodes.find(n => n.id === id)?.type === 'task').length;
+                      return `${agents} agente${agents > 1 ? 's' : ''} e ${tasks} tarefa${tasks > 1 ? 's' : ''}`;
+                    })()} • Pressione Delete ou clique em "Eliminar"
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    setSelectedNodes(new Set());
+                    setSelectedNode(null);
+                    setIsInspectorOpen(false);
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={deleteSelectedNodes}
+                  variant="destructive"
+                  size="sm"
+                  className="text-xs"
+                >
+                  <Trash2 className="h-3 w-3 mr-1" />
+                  Eliminar ({selectedNodes.size})
+                </Button>
+              </div>
+            </div>
+          </Panel>
+        )}
+
         {/* Debug Info */}
         {process.env.NODE_ENV === 'development' && (
           <Panel position="top-center" className="bg-yellow-100 dark:bg-yellow-900 rounded-lg shadow-lg border border-yellow-300 dark:border-yellow-700 m-4 p-2">
@@ -1167,6 +1217,83 @@ function VisualEditorContent() {
                 <span className="hidden md:inline">Limpar Editor</span>
               </Button>
               
+              {/* Select All Button */}
+              {nodes.length > 0 && selectedNodes.size < nodes.length && (
+                <div className="flex gap-1">
+                  <Button
+                    onClick={() => {
+                      const allNodeIds = nodes.map(node => node.id);
+                      setSelectedNodes(new Set(allNodeIds));
+                      setSelectedNode(null);
+                      setIsInspectorOpen(false);
+                    }}
+                    variant="outline"
+                    size="sm"
+                    title="Selecionar todos os nós"
+                    className="text-xs md:text-sm"
+                  >
+                    <CheckSquare className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                    <span className="hidden md:inline">Todos</span>
+                  </Button>
+                  
+                  {/* Select Agents Only */}
+                  {nodes.some(node => node.type === 'agent') && (
+                    <Button
+                      onClick={() => {
+                        const agentNodeIds = nodes.filter(node => node.type === 'agent').map(node => node.id);
+                        setSelectedNodes(new Set(agentNodeIds));
+                        setSelectedNode(null);
+                        setIsInspectorOpen(false);
+                      }}
+                      variant="outline"
+                      size="sm"
+                      title="Selecionar apenas agentes"
+                      className="text-xs md:text-sm"
+                    >
+                      <Users className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                      <span className="hidden md:inline">Agentes</span>
+                    </Button>
+                  )}
+                  
+                  {/* Select Tasks Only */}
+                  {nodes.some(node => node.type === 'task') && (
+                    <Button
+                      onClick={() => {
+                        const taskNodeIds = nodes.filter(node => node.type === 'task').map(node => node.id);
+                        setSelectedNodes(new Set(taskNodeIds));
+                        setSelectedNode(null);
+                        setIsInspectorOpen(false);
+                      }}
+                      variant="outline"
+                      size="sm"
+                      title="Selecionar apenas tasks"
+                      className="text-xs md:text-sm"
+                    >
+                      <CheckSquare className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                      <span className="hidden md:inline">Tasks</span>
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Clear Selection Button */}
+              {selectedNodes.size > 0 && (
+                <Button
+                  onClick={() => {
+                    setSelectedNodes(new Set());
+                    setSelectedNode(null);
+                    setIsInspectorOpen(false);
+                  }}
+                  variant="outline"
+                  size="sm"
+                  title="Limpar seleção"
+                  className="text-xs md:text-sm"
+                >
+                  <X className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                  <span className="hidden md:inline">Limpar Seleção</span>
+                </Button>
+              )}
+
               {/* Delete Selected Nodes Button */}
               {selectedNodes.size > 0 && (
                 <Button
