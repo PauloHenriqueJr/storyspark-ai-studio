@@ -450,6 +450,59 @@ function VisualEditorContent() {
     }
   }, [workflow, setNodes, setEdges, toast, reactFlowInstance, layoutDirection, createNodesFromData]);
 
+  // Listen for chat messages to trigger workflow execution
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.type === 'assistant' && 
+        (lastMessage.content.includes('Executando workflow') || 
+         lastMessage.content.includes('Iniciando execução'))) {
+      
+      // Auto-execute workflow after chat message
+      setTimeout(() => {
+        handleRunWorkflow();
+      }, 1000);
+    }
+  }, [messages]);
+
+  // Listen for workflow creation events from chat
+  useEffect(() => {
+    const handleWorkflowCreated = (event: CustomEvent) => {
+      const { agents, tasks, projectId: eventProjectId } = event.detail;
+      
+      // Only process if it's for the current project
+      if (eventProjectId && String(eventProjectId) === String(projectId)) {
+        // Force refresh of agents and tasks data
+        queryClient.invalidateQueries({ queryKey: queryKeys.agents(String(projectId)) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks(String(projectId)) });
+        
+        toast({
+          title: 'Workflow atualizado',
+          description: `${agents} agentes e ${tasks} tarefas foram criados no editor.`,
+        });
+      }
+    };
+
+    const handleExecuteWorkflow = (event: CustomEvent) => {
+      const { projectId: eventProjectId } = event.detail;
+      
+      // Only process if it's for the current project
+      if (eventProjectId && String(eventProjectId) === String(projectId)) {
+        // Auto-execute workflow
+        setTimeout(() => {
+          handleRunWorkflow();
+        }, 500);
+      }
+    };
+
+    window.addEventListener('workflowCreated', handleWorkflowCreated as EventListener);
+    window.addEventListener('executeWorkflow', handleExecuteWorkflow as EventListener);
+    
+    return () => {
+      window.removeEventListener('workflowCreated', handleWorkflowCreated as EventListener);
+      window.removeEventListener('executeWorkflow', handleExecuteWorkflow as EventListener);
+    };
+  }, [projectId, queryClient, toast]);
+
   // Auto-refresh when agents/tasks change
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -457,7 +510,7 @@ function VisualEditorContent() {
         await queryClient.invalidateQueries({ queryKey: queryKeys.agents(projectId) });
         await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
       }
-    }, 3000); // Poll every 3 seconds
+    }, 2000); // Poll every 2 seconds for better real-time updates
     return () => clearInterval(interval);
   }, [projectId, queryClient]);
 
@@ -541,8 +594,14 @@ function VisualEditorContent() {
   const executionQuery = useQuery({
     queryKey: queryKeys.execution(currentExecution?.id || ''),
     queryFn: () => apiClient.getExecution(currentExecution!.id),
-    enabled: !!currentExecution && !!currentExecution.id && currentExecution.status === 'running',
-    refetchInterval: 1000,
+    enabled: !!currentExecution && !!currentExecution.id,
+    refetchInterval: (data) => {
+      // Poll more frequently when running, less when completed/error
+      if (data?.status === 'running') return 1000;
+      if (data?.status === 'completed' || data?.status === 'error') return false;
+      return 2000;
+    },
+    refetchIntervalInBackground: true,
   });
 
   useEffect(() => {
@@ -550,55 +609,63 @@ function VisualEditorContent() {
       const data: Execution = executionQuery.data as Execution;
       setCurrentExecution(data);
 
-      // Track running nodes based on execution progress
-      if (data.status === 'running') {
-        const activeNodes = new Set<string>();
+        // Track running nodes based on execution progress
+        if (data.status === 'running') {
+          const activeNodes = new Set<string>();
 
-        // Analyze logs to determine which nodes are currently running
-        const logs = data.logs || '';
-        const recentLines = logs.split('\n').slice(-10); // Last 10 lines
+          // Analyze logs to determine which nodes are currently running
+          const logs = data.logs || '';
+          const recentLines = logs.split('\n').slice(-15); // Last 15 lines for better detection
 
-        // Look for agent and task mentions in recent logs
-        recentLines.forEach(line => {
-          const lowerLine = line.toLowerCase();
+          // Look for agent and task mentions in recent logs
+          recentLines.forEach(line => {
+            const lowerLine = line.toLowerCase();
 
-          // Check for agent execution
-          agents.forEach(agent => {
-            if (lowerLine.includes(agent.name.toLowerCase()) ||
-              lowerLine.includes(`agent-${agent.id}`) ||
-              lowerLine.includes('starting') && lowerLine.includes('agent') ||
-              lowerLine.includes('running') && lowerLine.includes('agent')) {
-              activeNodes.add(`agent-${agent.id}`);
-            }
-          });          // Check for task execution
-          tasks.forEach(task => {
-            if (lowerLine.includes(task.description.toLowerCase()) ||
-              lowerLine.includes(`task-${task.id}`) ||
-              lowerLine.includes('executing') && lowerLine.includes('task') ||
-              lowerLine.includes('running') && lowerLine.includes('task')) {
-              activeNodes.add(`task-${task.id}`);
-            }
+            // Check for agent execution with more patterns
+            agents.forEach(agent => {
+              if (lowerLine.includes(agent.name.toLowerCase()) ||
+                lowerLine.includes(`agent-${agent.id}`) ||
+                lowerLine.includes(`agent ${agent.id}`) ||
+                (lowerLine.includes('starting') && lowerLine.includes('agent')) ||
+                (lowerLine.includes('running') && lowerLine.includes('agent')) ||
+                (lowerLine.includes('executing') && lowerLine.includes('agent')) ||
+                (lowerLine.includes('processing') && lowerLine.includes('agent'))) {
+                activeNodes.add(`agent-${agent.id}`);
+              }
+            });
+
+            // Check for task execution with more patterns
+            tasks.forEach(task => {
+              if (lowerLine.includes(task.description.toLowerCase()) ||
+                lowerLine.includes(`task-${task.id}`) ||
+                lowerLine.includes(`task ${task.id}`) ||
+                (lowerLine.includes('executing') && lowerLine.includes('task')) ||
+                (lowerLine.includes('running') && lowerLine.includes('task')) ||
+                (lowerLine.includes('processing') && lowerLine.includes('task')) ||
+                (lowerLine.includes('completing') && lowerLine.includes('task'))) {
+                activeNodes.add(`task-${task.id}`);
+              }
+            });
           });
-        });
 
-        // If no specific nodes found in logs, show progress through the flow
-        if (activeNodes.size === 0) {
-          // Try to find any node that might be running based on general execution indicators
-          const executionIndicators = ['starting', 'running', 'executing', 'processing'];
-          const hasExecutionActivity = recentLines.some(line =>
-            executionIndicators.some(indicator => line.toLowerCase().includes(indicator))
-          );
+          // If no specific nodes found in logs, show progress through the flow
+          if (activeNodes.size === 0) {
+            // Try to find any node that might be running based on general execution indicators
+            const executionIndicators = ['starting', 'running', 'executing', 'processing', 'working', 'analyzing'];
+            const hasExecutionActivity = recentLines.some(line =>
+              executionIndicators.some(indicator => line.toLowerCase().includes(indicator))
+            );
 
-          if (hasExecutionActivity) {
-            // If there's execution activity but no specific nodes, highlight the first agent
-            const firstAgent = agents[0];
-            if (firstAgent) {
-              activeNodes.add(`agent-${firstAgent.id}`);
+            if (hasExecutionActivity) {
+              // If there's execution activity but no specific nodes, highlight the first agent
+              const firstAgent = agents[0];
+              if (firstAgent) {
+                activeNodes.add(`agent-${firstAgent.id}`);
+              }
             }
           }
-        }
 
-        setRunningNodes(activeNodes);      // Append new logs to chat
+          setRunningNodes(activeNodes);      // Append new logs to chat
         try {
           const logs = data.logs || '';
           if (logs && logs.length > lastLogSize) {
@@ -901,72 +968,101 @@ function VisualEditorContent() {
         )}
         {/* Clean Toolbar */}
         <Panel position="top-left" className="bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 m-4">
-          <Button
-            onClick={() => {
-              setNodes([]);
-              setEdges([]);
-              toast({ title: 'Fluxo limpo', description: 'Todos os cards e conexões foram removidos.' });
-            }}
-            variant="outline"
-            size="sm"
-            title="Limpar fluxo"
-            className="text-xs md:text-sm"
-          >
-            <RotateCcw className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
-            <span className="hidden md:inline">Limpar</span>
-          </Button>
-          <Button
-            onClick={handleRunWorkflow}
-            className="btn-primary gap-1 md:gap-2"
-            size="sm"
-            disabled={runMutation.isPending || !projectId}
-            title={!projectId ? "Selecione um projeto primeiro" : "Executar workflow"}
-          >
-            <Play className="h-3 w-3 md:h-4 md:w-4" />
-            <span className="text-xs md:text-sm">{runMutation.isPending ? 'Run...' : 'Run'}</span>
-          </Button>
-          {runMutation.isPending && <div className="text-xs text-muted-foreground mt-1">Carregando execução...</div>}
-          {!projectId && <div className="text-xs text-muted-foreground mt-1">Selecione um projeto para executar</div>}
-          <Button
-            onClick={handleValidate}
-            variant="outline"
-            size="sm"
-            className="text-xs md:text-sm"
-          >
-            <CheckSquare className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
-            <span className="hidden md:inline">Validar</span>
-          </Button>
-          <Separator orientation="vertical" className="h-4 md:h-6 hidden md:block" />
-          <Button
-            onClick={handleAutoLayout}
-            variant="ghost"
-            size="sm"
-            title="Auto Layout"
-          >
-            <Layers className="h-3 w-3 md:h-4 md:w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => reactFlowInstance?.fitView({ padding: 0.2, duration: 200 })}
-            title="Fit View"
-          >
-            <Maximize className="h-3 w-3 md:h-4 md:w-4" />
-          </Button>
-          <Separator orientation="vertical" className="h-4 md:h-6 hidden md:block" />
-          <Button
-            onClick={handleExportPNG}
-            variant="ghost"
-            size="sm"
-            disabled={exportMutation.isPending || !projectId}
-            title={!projectId ? "Selecione um projeto primeiro" : "Exportar"}
-          >
-            <Download className="h-3 w-3 md:h-4 md:w-4" />
-            {exportMutation.isPending && <span className="ml-1 text-xs hidden md:inline">...</span>}
-          </Button>
-          {!projectId && <div className="text-xs text-muted-foreground mt-1">Selecione um projeto para exportar</div>}
-          <Separator orientation="vertical" className="h-4 md:h-6 hidden md:block" />
-
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  setNodes([]);
+                  setEdges([]);
+                  toast({ title: 'Fluxo limpo', description: 'Todos os cards e conexões foram removidos.' });
+                }}
+                variant="outline"
+                size="sm"
+                title="Limpar fluxo"
+                className="text-xs md:text-sm"
+              >
+                <RotateCcw className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                <span className="hidden md:inline">Limpar</span>
+              </Button>
+              <Button
+                onClick={handleRunWorkflow}
+                className="btn-primary gap-1 md:gap-2"
+                size="sm"
+                disabled={runMutation.isPending || !projectId || currentExecution?.status === 'running'}
+                title={!projectId ? "Selecione um projeto primeiro" : "Executar workflow"}
+              >
+                <Play className="h-3 w-3 md:h-4 md:w-4" />
+                <span className="text-xs md:text-sm">
+                  {runMutation.isPending ? 'Run...' : 
+                   currentExecution?.status === 'running' ? 'Running...' : 'Run'}
+                </span>
+              </Button>
+            </div>
+            
+            {/* Execution Status */}
+            {currentExecution && (
+              <div className="flex items-center gap-2 text-xs">
+                <div className={`w-2 h-2 rounded-full ${
+                  currentExecution.status === 'running' ? 'bg-green-500 animate-pulse' :
+                  currentExecution.status === 'completed' ? 'bg-green-600' :
+                  currentExecution.status === 'error' ? 'bg-red-500' : 'bg-gray-400'
+                }`} />
+                <span className="text-muted-foreground">
+                  {currentExecution.status === 'running' ? 'Executando...' :
+                   currentExecution.status === 'completed' ? 'Concluído' :
+                   currentExecution.status === 'error' ? 'Erro' : 'Status desconhecido'}
+                </span>
+                {currentExecution.status === 'running' && runningNodes.size > 0 && (
+                  <span className="text-muted-foreground">
+                    ({runningNodes.size} ativo{runningNodes.size > 1 ? 's' : ''})
+                  </span>
+                )}
+              </div>
+            )}
+            
+            {runMutation.isPending && <div className="text-xs text-muted-foreground">Carregando execução...</div>}
+            {!projectId && <div className="text-xs text-muted-foreground">Selecione um projeto para executar</div>}
+            
+            <div className="flex gap-2">
+              <Button
+                onClick={handleValidate}
+                variant="outline"
+                size="sm"
+                className="text-xs md:text-sm"
+              >
+                <CheckSquare className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                <span className="hidden md:inline">Validar</span>
+              </Button>
+              <Separator orientation="vertical" className="h-4 md:h-6 hidden md:block" />
+              <Button
+                onClick={handleAutoLayout}
+                variant="ghost"
+                size="sm"
+                title="Auto Layout"
+              >
+                <Layers className="h-3 w-3 md:h-4 md:w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => reactFlowInstance?.fitView({ padding: 0.2, duration: 200 })}
+                title="Fit View"
+              >
+                <Maximize className="h-3 w-3 md:h-4 md:w-4" />
+              </Button>
+              <Separator orientation="vertical" className="h-4 md:h-6 hidden md:block" />
+              <Button
+                onClick={handleExportPNG}
+                variant="ghost"
+                size="sm"
+                disabled={exportMutation.isPending || !projectId}
+                title={!projectId ? "Selecione um projeto primeiro" : "Exportar"}
+              >
+                <Download className="h-3 w-3 md:h-4 md:w-4" />
+                {exportMutation.isPending && <span className="ml-1 text-xs hidden md:inline">...</span>}
+              </Button>
+            </div>
+          </div>
         </Panel>
 
         {/* Layout Control Panel */}
