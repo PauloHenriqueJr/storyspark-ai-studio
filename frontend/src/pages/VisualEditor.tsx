@@ -22,12 +22,10 @@ import TaskNode from '@/components/nodes/TaskNode';
 import { getLayoutedElements } from '@/utils/layoutUtils';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { InspectorPanel } from '@/components/inspector/InspectorPanel';
 import { apiClient, queryKeys } from '@/lib/api';
 import {
   Play,
@@ -225,7 +223,6 @@ function VisualEditorContent() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [currentExecution, setCurrentExecution] = useState<Execution | null>(null);
   const [lastLogSize, setLastLogSize] = useState(0);
-  const [editingNode, setEditingNode] = useState<{ label: string; description: string } | null>(null);
   const [runningNodes, setRunningNodes] = useState<Set<string>>(new Set());
   const [layoutDirection, setLayoutDirection] = useState<'TB' | 'LR'>('TB');
   const [creatingNodes, setCreatingNodes] = useState<Set<string>>(new Set());
@@ -1046,122 +1043,31 @@ function VisualEditorContent() {
 
       {/* Inspector Sidebar */}
       {selectedNode && isInspectorOpen && (
-        <div className="w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-xl overflow-y-auto">
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Inspector</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsInspectorOpen(false)}
-              >
-                ✕
-              </Button>
-            </div>
-
-            {selectedNode ? (
-              <div className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Node Details</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div>
-                      <label className="text-sm font-medium">ID</label>
-                      <p className="text-sm text-muted-foreground">{selectedNode.id}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Type</label>
-                      <p className="text-sm text-muted-foreground">{selectedNode.type}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Position</label>
-                      <p className="text-sm text-muted-foreground">
-                        x: {selectedNode.position.x}, y: {selectedNode.position.y}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center justify-between">
-                      Edit Properties
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (editingNode) {
-                            // Save changes
-                            setNodes((nds) =>
-                              nds.map((node) => {
-                                if (node.id === selectedNode.id) {
-                                  return {
-                                    ...node,
-                                    data: {
-                                      ...node.data,
-                                      label: editingNode.label,
-                                      description: editingNode.description,
-                                    },
-                                  };
-                                }
-                                return node;
-                              })
-                            );
-                            setEditingNode(null);
-                            toast({ title: 'Node updated', description: 'Changes saved successfully.' });
-                          } else {
-                            setEditingNode({
-                              label: selectedNode.data?.label || '',
-                              description: selectedNode.data?.description || '',
-                            });
-                          }
-                        }}
-                      >
-                        {editingNode ? 'Save' : 'Edit'}
-                      </Button>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {editingNode ? (
-                      <>
-                        <div>
-                          <label className="text-sm font-medium">Label</label>
-                          <Input
-                            value={editingNode.label}
-                            onChange={(e) => setEditingNode({ ...editingNode, label: e.target.value })}
-                            placeholder="Enter label"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium">Description</label>
-                          <Textarea
-                            value={editingNode.description}
-                            onChange={(e) => setEditingNode({ ...editingNode, description: e.target.value })}
-                            placeholder="Enter description"
-                            rows={3}
-                          />
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-sm text-muted-foreground">
-                        Click "Edit" to modify node properties
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Zap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h4 className="font-medium mb-2">No Selection</h4>
-                <p className="text-sm text-muted-foreground">
-                  Click on a node or edge to inspect and edit its properties
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
+        <InspectorPanel
+          selectedNode={selectedNode}
+          onClose={() => setIsInspectorOpen(false)}
+          onUpdateNode={(nodeId, updates) => {
+            setNodes((nds) =>
+              nds.map((node) => {
+                if (node.id === nodeId) {
+                  return {
+                    ...node,
+                    data: {
+                      ...node.data,
+                      ...updates,
+                    },
+                  };
+                }
+                return node;
+              })
+            );
+          }}
+          onDeleteNode={(nodeId) => {
+            setNodes((nds) => nds.filter((node) => node.id !== nodeId));
+            setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+            setIsInspectorOpen(false);
+          }}
+        />
       )}
     </div>
   );
