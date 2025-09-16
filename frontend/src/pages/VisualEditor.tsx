@@ -40,7 +40,8 @@ import {
   Plus,
   Settings,
   Layers,
-  Zap
+  Zap,
+  User
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
@@ -214,12 +215,13 @@ function VisualEditorContent() {
   const [showChat, setShowChat] = useState(true);
   const location = useLocation();
   const { toast } = useToast();
-  const { initializeWithPrompt, addMessage, setOpen: setChatOpen, workflow } = useChatDockStore();
+  const { initializeWithPrompt, addMessage, setOpen: setChatOpen, workflow, messages } = useChatDockStore();
   const queryClient = useQueryClient();
   const reactFlowInstance = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<ReactFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ReactFlowEdge>([]);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [currentExecution, setCurrentExecution] = useState<Execution | null>(null);
   const [lastLogSize, setLastLogSize] = useState(0);
@@ -511,107 +513,160 @@ function VisualEditorContent() {
       const data: Execution = executionQuery.data as Execution;
       setCurrentExecution(data);
 
-      // Track running nodes
+      // Track running nodes based on execution progress
       if (data.status === 'running') {
-        // Simulate node progression (in real app, this would come from backend)
-        const simulatedActiveNodes = new Set<string>();
-        nodes.forEach((node, index) => {
-          if (index === 0 || (index === 1 && Math.random() > 0.5)) {
-            simulatedActiveNodes.add(node.id);
-          }
-        });
-        setRunningNodes(simulatedActiveNodes);
-      } else {
-        setRunningNodes(new Set());
-      }
+        const activeNodes = new Set<string>();
 
-      // Append new logs to chat
-      try {
+        // Analyze logs to determine which nodes are currently running
         const logs = data.logs || '';
-        if (logs && logs.length > lastLogSize) {
-          const delta = logs.slice(lastLogSize);
-          const lines = delta.split('\n').map(l => l.trim()).filter(Boolean).slice(-5);
-          if (lines.length) {
-            setChatOpen(true);
-            lines.forEach((line) => {
-              // Clean up log messages
-              const cleanedLine = line
-                .replace(/\*\*/g, '')
-                .replace(/[🎯✅📋🔧💡]/gu, '')
-                .trim();
-              if (cleanedLine) {
-                addMessage({
-                  id: `log-${data.id}-${Math.random()}`,
-                  type: 'assistant',
-                  content: cleanedLine,
-                  timestamp: new Date().toISOString()
-                });
-              }
-            });
-          }
-          setLastLogSize(logs.length);
-        }
-      } catch {
-        // Ignore errors when parsing logs
-      }
+        const recentLines = logs.split('\n').slice(-10); // Last 10 lines
 
-      if (data.status !== 'running') {
-        setRunningNodes(new Set());
-        // Update all nodes to refresh their labels
-        setNodes((nds) =>
-          nds.map((node: ReactFlowNode) => {
-            const nodeData = node.data;
-            return {
-              ...node,
-              data: {
-                ...nodeData,
-                isRunning: false,
-                status: data.status,
-              },
-            };
-          })
-        );
-        setChatOpen(true);
-        addMessage({
-          id: `exec-end-${data.id}`,
-          type: 'assistant',
-          content: data.status === 'completed'
-            ? 'Execução concluída com sucesso.'
-            : `Execução falhou: ${data.error_message || 'verifique os logs'}`,
-          timestamp: new Date().toISOString()
+        // Look for agent and task mentions in recent logs
+        recentLines.forEach(line => {
+          const lowerLine = line.toLowerCase();
+
+          // Check for agent execution
+          agents.forEach(agent => {
+            if (lowerLine.includes(agent.name.toLowerCase()) ||
+              lowerLine.includes(`agent-${agent.id}`) ||
+              lowerLine.includes('starting') && lowerLine.includes('agent') ||
+              lowerLine.includes('running') && lowerLine.includes('agent')) {
+              activeNodes.add(`agent-${agent.id}`);
+            }
+          });          // Check for task execution
+          tasks.forEach(task => {
+            if (lowerLine.includes(task.description.toLowerCase()) ||
+              lowerLine.includes(`task-${task.id}`) ||
+              lowerLine.includes('executing') && lowerLine.includes('task') ||
+              lowerLine.includes('running') && lowerLine.includes('task')) {
+              activeNodes.add(`task-${task.id}`);
+            }
+          });
         });
-        toast({
-          title: data.status === 'completed' ? "Concluído" : "Falha",
-          description: data.output_payload?.result || data.logs || data.error_message,
-        });
-      } else {
-        // Update running nodes with animation
-        setNodes((nds) =>
-          nds.map((node: ReactFlowNode) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const nodeData = node.data as any;
-            const isRunning = runningNodes.has(node.id);
-            return {
-              ...node,
-              data: {
-                ...nodeData,
-                isRunning,
-                status: 'running',
-              },
-            };
-          })
-        );
+
+        // If no specific nodes found in logs, show progress through the flow
+        if (activeNodes.size === 0) {
+          // Try to find any node that might be running based on general execution indicators
+          const executionIndicators = ['starting', 'running', 'executing', 'processing'];
+          const hasExecutionActivity = recentLines.some(line =>
+            executionIndicators.some(indicator => line.toLowerCase().includes(indicator))
+          );
+
+          if (hasExecutionActivity) {
+            // If there's execution activity but no specific nodes, highlight the first agent
+            const firstAgent = agents[0];
+            if (firstAgent) {
+              activeNodes.add(`agent-${firstAgent.id}`);
+            }
+          }
+        }
+
+        setRunningNodes(activeNodes);      // Append new logs to chat
+        try {
+          const logs = data.logs || '';
+          if (logs && logs.length > lastLogSize) {
+            const delta = logs.slice(lastLogSize);
+            const lines = delta.split('\n').map(l => l.trim()).filter(Boolean).slice(-5);
+            if (lines.length) {
+              setIsChatOpen(true); // Open chat sidebar when execution starts
+              // Process logs in batches to avoid spam
+              const recentLines = lines.slice(-3); // Last 3 lines
+
+              recentLines.forEach((line) => {
+                // Clean up log messages
+                const cleanedLine = line
+                  .replace(/\*\*/g, '')
+                  .replace(/[🎯✅📋🔧💡]/gu, '')
+                  .trim();
+
+                if (cleanedLine && cleanedLine.length > 10) { // Filter out very short messages
+                  // Determine message type and format accordingly
+                  let formattedContent = cleanedLine;
+
+                  // Check if it's an agent action
+                  if (cleanedLine.toLowerCase().includes('agent') ||
+                    cleanedLine.toLowerCase().includes('starting') ||
+                    cleanedLine.toLowerCase().includes('executing')) {
+                    formattedContent = `🤖 ${cleanedLine}`;
+                  }
+                  // Check if it's a task completion
+                  else if (cleanedLine.toLowerCase().includes('completed') ||
+                    cleanedLine.toLowerCase().includes('finished') ||
+                    cleanedLine.toLowerCase().includes('done')) {
+                    formattedContent = `✅ ${cleanedLine}`;
+                  }
+                  // Check if it's an error
+                  else if (cleanedLine.toLowerCase().includes('error') ||
+                    cleanedLine.toLowerCase().includes('failed') ||
+                    cleanedLine.toLowerCase().includes('exception')) {
+                    formattedContent = `❌ ${cleanedLine}`;
+                  }
+
+                  addMessage({
+                    id: `log-${data.id}-${Math.random()}`,
+                    type: 'assistant',
+                    content: formattedContent,
+                    timestamp: new Date().toISOString()
+                  });
+                }
+              });
+            }
+            setLastLogSize(logs.length);
+          }
+        } catch {
+          // Ignore errors when parsing logs
+        }
+
+        if (data.status !== 'running') {
+          setRunningNodes(new Set());
+          // Update all nodes to refresh their labels
+          setNodes((nds) =>
+            nds.map((node: ReactFlowNode) => {
+              const nodeData = node.data;
+              return {
+                ...node,
+                data: {
+                  ...nodeData,
+                  isRunning: false,
+                  status: data.status,
+                },
+              };
+            })
+          );
+          setChatOpen(true);
+          addMessage({
+            id: `exec-end-${data.id}`,
+            type: 'assistant',
+            content: data.status === 'completed'
+              ? 'Execução concluída com sucesso.'
+              : `Execução falhou: ${data.error_message || 'verifique os logs'}`,
+            timestamp: new Date().toISOString()
+          });
+          toast({
+            title: data.status === 'completed' ? "Concluído" : "Falha",
+            description: data.output_payload?.result || data.logs || data.error_message,
+          });
+        } else {
+          // Update running nodes with animation
+          setNodes((nds) =>
+            nds.map((node: ReactFlowNode) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const nodeData = node.data as any;
+              const isRunning = runningNodes.has(node.id);
+              return {
+                ...node,
+                data: {
+                  ...nodeData,
+                  isRunning,
+                  status: 'running',
+                },
+              };
+            })
+          );
+        }
       }
     }
-    if (executionQuery.isError && executionQuery.error) {
-      const error = executionQuery.error;
-      toast({
-        title: "Erro na execução",
-        description: (error as Error).message || "Falha ao buscar status",
-        variant: "destructive",
-      });
-    }
-  }, [executionQuery.data, executionQuery.isSuccess, executionQuery.isError, executionQuery.error, setCurrentExecution, setNodes, setChatOpen, addMessage, toast, lastLogSize, setLastLogSize, nodes, runningNodes]);
+  }, [executionQuery.data, executionQuery.isSuccess, setCurrentExecution, setNodes, setChatOpen, addMessage, toast, lastLogSize, setLastLogSize, nodes, runningNodes, agents, tasks]);
 
   const onConnect = useCallback(
     async (params: Connection | Edge) => {
@@ -657,7 +712,10 @@ function VisualEditorContent() {
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedNode(node);
-    setIsInspectorOpen(true);
+    // Only auto-open inspector on desktop (lg screens and up)
+    if (window.innerWidth >= 1024) {
+      setIsInspectorOpen(true);
+    }
   }, []);
 
   const handleRunWorkflow = () => {
@@ -753,14 +811,22 @@ function VisualEditorContent() {
     });
   };
 
-  // Handle window resize
+  // Handle window resize and initialize inspector state
   useEffect(() => {
     const handleResize = () => {
-      setIsInspectorOpen(window.innerWidth >= 1024);
+      // Close inspector on mobile/tablet, keep state on desktop
+      if (window.innerWidth < 1024) {
+        setIsInspectorOpen(false);
+      }
+      // Note: We don't auto-open on resize, only on node click for desktop
       if (window.innerWidth < 768) {
         setActiveTab('canvas');
       }
     };
+
+    // Initialize on mount
+    handleResize();
+
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -785,10 +851,9 @@ function VisualEditorContent() {
   }
 
   return (
-    <div className="h-[calc(100vh-var(--topbar-height))] flex flex-col bg-gray-50 dark:bg-gray-950">
-
-      {/* Main Canvas */}
-      <div className="flex-1 relative min-h-0">
+    <div className="h-[calc(100vh-var(--topbar-height))] flex bg-gray-50 dark:bg-gray-950">
+      {/* Main Canvas - Central */}
+      <div className="flex-1 flex flex-col relative min-h-0">
         {isLoadingFlow && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80">
             <div className="p-6 rounded-radius-lg bg-surface border border-border shadow-lg flex flex-col items-center gap-3">
@@ -863,6 +928,15 @@ function VisualEditorContent() {
             {exportMutation.isPending && <span className="ml-1 text-xs hidden md:inline">...</span>}
           </Button>
           {!projectId && <div className="text-xs text-muted-foreground mt-1">Selecione um projeto para exportar</div>}
+          <Separator orientation="vertical" className="h-4 md:h-6 hidden md:block" />
+          <Button
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            variant={isChatOpen ? "default" : "ghost"}
+            size="sm"
+            title="AI Builder Chat"
+          >
+            <Zap className="h-3 w-3 md:h-4 md:w-4" />
+          </Button>
         </Panel>
 
         {/* Layout Control Panel */}
@@ -935,10 +1009,94 @@ function VisualEditorContent() {
 
       </div>
 
+      {/* AI Builder Chat Sidebar */}
+      {isChatOpen && (
+        <div className="w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-xl z-20 flex flex-col">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-accent-purple rounded-radius flex items-center justify-center">
+                <Zap className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">AI Builder</h3>
+                <p className="text-xs text-muted-foreground">Execução em tempo real</p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsChatOpen(false)}
+            >
+              ✕
+            </Button>
+          </div>
+
+          <div className="flex-1 p-4 overflow-y-auto">
+            <div className="space-y-4">
+              {/* Status da execução */}
+              {currentExecution && (
+                <div className="p-3 bg-muted rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`w-2 h-2 rounded-full ${currentExecution.status === 'running' ? 'bg-green-500 animate-pulse' :
+                      currentExecution.status === 'completed' ? 'bg-blue-500' :
+                        'bg-red-500'
+                      }`} />
+                    <span className="text-sm font-medium capitalize">
+                      {currentExecution.status === 'running' ? 'Executando' :
+                        currentExecution.status === 'completed' ? 'Concluído' :
+                          'Falhou'}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {runningNodes.size} nodes ativos • ID: {currentExecution.id}
+                  </div>
+                </div>
+              )}
+
+              {/* Mensagens do chat */}
+              {messages?.map((message) => (
+                <div key={message.id} className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'
+                  }`}>
+                  {message.type === 'assistant' && (
+                    <div className="w-6 h-6 bg-accent-purple rounded-full flex items-center justify-center flex-shrink-0">
+                      <Zap className="h-3 w-3 text-white" />
+                    </div>
+                  )}
+                  <div className={`max-w-[80%] p-3 rounded-lg ${message.type === 'user'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted'
+                    }`}>
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <span className="text-xs opacity-70 mt-1 block">
+                      {new Date(message.timestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  {message.type === 'user' && (
+                    <div className="w-6 h-6 bg-secondary rounded-full flex items-center justify-center flex-shrink-0">
+                      <User className="h-3 w-3" />
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Placeholder quando não há mensagens */}
+              {(!messages || messages.length === 0) && !currentExecution && (
+                <div className="text-center py-8">
+                  <Zap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h4 className="font-medium mb-2">AI Builder Chat</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Clique em "Run" para iniciar a execução e ver o progresso em tempo real aqui.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Inspector Panel - Clean Sidebar */}
-      {selectedNode && (
-        <div className="absolute right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-xl z-20 overflow-y-auto">
+      {selectedNode && isInspectorOpen && (
+        <div className={`absolute ${isChatOpen ? 'right-80' : 'right-0'} top-0 bottom-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-xl z-20 overflow-y-auto`}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold">Inspector</h3>
             <Button
