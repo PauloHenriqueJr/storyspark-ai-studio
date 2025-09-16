@@ -3,6 +3,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "./topbar";
 import { ChatDock } from "./chat-dock";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 interface AppShellProps {
@@ -12,6 +13,8 @@ interface AppShellProps {
 export const AppShell = ({ children }: AppShellProps) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const isMobile = useIsMobile();
+  const location = useLocation();
+  const isInEditor = location.pathname === '/app/editor';
 
   useEffect(() => {
     try {
@@ -39,7 +42,10 @@ export const AppShell = ({ children }: AppShellProps) => {
           onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           isSidebarCollapsed={isSidebarCollapsed}
         />
-        <main className="flex-1 overflow-auto p-6">
+        <main className={cn(
+          "flex-1 overflow-auto",
+          isInEditor ? "p-0" : "p-6" // Remove padding in editor to allow full canvas
+        )}>
           {children}
         </main>
         <ChatDock />

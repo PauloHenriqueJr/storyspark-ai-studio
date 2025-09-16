@@ -19,11 +19,11 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 const quickSuggestions = [
-  'Create a customer support project',
-  'Add a data analysis agent',
-  'Generate tasks for content creation',
-  'Import n8n workflow',
-  'Connect nodes in visual editor',
+  'Criar um sistema de atendimento ao cliente',
+  'Gerar um agente de análise de dados',
+  'Criar tarefas para produção de conteúdo',
+  'Desenvolver um workflow de marketing',
+  'Criar agentes para análise de redes sociais',
 ];
 
 interface ChatMessage {
@@ -250,55 +250,67 @@ export function ChatDock() {
   return (
     <div className={cn(
       "fixed z-40 bg-surface border-border flex flex-col",
-      "left-0 right-0 bottom-0 h-[70vh] border-t rounded-t-2xl", // Mobile: bottom sheet
-      "sm:left-0 sm:right-auto sm:top-topbar sm:bottom-0 sm:h-auto sm:w-72 sm:border-r sm:border-t-0 sm:rounded-none", // Tablet
-      "lg:w-80 xl:w-96" // Desktop
+      "left-0 top-16 bottom-0 w-80 border-r shadow-xl", // Always left sidebar, starts below topbar
+      "lg:w-80 xl:w-96" // Desktop widths
     )}>
       {/* Header - Responsive */}
-      <div className="p-3 sm:p-4 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 bg-accent-purple rounded-radius flex items-center justify-center">
-            <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
+      <div className="p-4 border-b border-border">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-accent-purple rounded-radius flex items-center justify-center">
+              <Sparkles className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-base">AI Builder</h3>
+              <p className="text-xs text-muted-foreground">Crie workflows com linguagem natural</p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-semibold text-sm sm:text-base">AI Builder</h3>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Create with natural language</p>
-          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setOpen(false)}
+            className="h-8 w-8"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setOpen(false)}
-          className="h-7 w-7 sm:h-8 sm:w-8"
-        >
-          <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-        </Button>
+        
+        {/* Visual feedback for editor context */}
+        {isInEditor && (
+          <div className="flex items-center gap-2 p-2 bg-muted rounded-lg">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="text-xs font-medium">Editor Visual Ativo</span>
+            <span className="text-xs text-muted-foreground ml-auto">
+              Digite para criar workflows
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Messages - Responsive */}
       <ScrollArea className="flex-1 p-3 sm:p-4">
         {messages.length === 0 ? (
           <div className="space-y-3 sm:space-y-4">
-            <div className="text-center py-6 sm:py-8">
-              <Bot className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-3 sm:mb-4" />
-              <h4 className="font-medium text-sm sm:text-base mb-2">
-                What would you like to build?
+            <div className="text-center py-8">
+              <Bot className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h4 className="font-medium text-base mb-2">
+                O que você gostaria de criar?
               </h4>
-              <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4 px-4">
-                Describe what you want to automate and I'll help you create the perfect workflow.
+              <p className="text-sm text-muted-foreground mb-4 px-2">
+                Descreva o workflow que você quer automatizar e eu criarei os agentes e tarefas no editor visual.
               </p>
             </div>
             
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="flex items-center gap-2 mb-2 sm:mb-3">
-                <Lightbulb className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-accent-yellow" />
-                <span className="text-xs sm:text-sm font-medium">Quick suggestions:</span>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 mb-3">
+                <Lightbulb className="h-4 w-4 text-accent-yellow" />
+                <span className="text-sm font-medium">Sugestões rápidas:</span>
               </div>
               {quickSuggestions.map((suggestion, index) => (
                 <button
                   key={index}
                   onClick={() => handleSuggestionClick(suggestion)}
-                  className="w-full text-left p-2.5 sm:p-3 rounded-radius border border-border hover:bg-muted-hover transition-colors text-xs sm:text-sm"
+                  className="w-full text-left p-3 rounded-radius border border-border hover:bg-muted-hover transition-colors text-sm"
                 >
                   {suggestion}
                 </button>
@@ -380,7 +392,7 @@ export function ChatDock() {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Describe what you want to build..."
+            placeholder="Descreva o workflow que você quer criar..."
             className="input-notion flex-1 text-xs sm:text-sm"
             disabled={isLoading}
           />
@@ -393,7 +405,7 @@ export function ChatDock() {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Press Enter to send, Shift+Enter for new line
+          Pressione Enter para enviar, Shift+Enter para nova linha
         </p>
       </div>
     </div>

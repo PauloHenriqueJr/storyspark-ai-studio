@@ -221,7 +221,7 @@ function VisualEditorContent() {
   const [nodes, setNodes, onNodesChange] = useNodesState<ReactFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ReactFlowEdge>([]);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
+
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [currentExecution, setCurrentExecution] = useState<Execution | null>(null);
   const [lastLogSize, setLastLogSize] = useState(0);
@@ -460,7 +460,7 @@ function VisualEditorContent() {
     mutationFn: (inputs: Record<string, unknown>) => apiClient.run.project(Number(projectId), { inputs, language: 'pt-br' }),
     onSuccess: (data: Execution) => {
       setCurrentExecution(data);
-      setChatOpen(true);
+      // Chat será aberto automaticamente pelo ChatDock
       addMessage({ id: `exec-id-${data.id}`, type: 'assistant', content: `Execução iniciada (ID: ${data.id}).`, timestamp: new Date().toISOString() });
       toast({
         title: "Workflow Executado",
@@ -568,7 +568,7 @@ function VisualEditorContent() {
             const delta = logs.slice(lastLogSize);
             const lines = delta.split('\n').map(l => l.trim()).filter(Boolean).slice(-5);
             if (lines.length) {
-              setIsChatOpen(true); // Open chat sidebar when execution starts
+              // Chat será aberto automaticamente pelo ChatDock
               // Process logs in batches to avoid spam
               const recentLines = lines.slice(-3); // Last 3 lines
 
@@ -633,7 +633,7 @@ function VisualEditorContent() {
               };
             })
           );
-          setChatOpen(true);
+          // Chat será aberto automaticamente pelo ChatDock
           addMessage({
             id: `exec-end-${data.id}`,
             type: 'assistant',
@@ -729,7 +729,7 @@ function VisualEditorContent() {
     }
 
     const inputs = {}; // TODO: collect inputs from UI if available
-    setChatOpen(true);
+    // Chat será aberto automaticamente pelo ChatDock
     addMessage({ id: `exec-start-${Date.now()}`, type: 'assistant', content: 'Iniciando execução do workflow...', timestamp: new Date().toISOString() });
     runMutation.mutate(inputs);
   };
@@ -851,9 +851,9 @@ function VisualEditorContent() {
   }
 
   return (
-    <div className="h-[calc(100vh-var(--topbar-height))] flex bg-gray-50 dark:bg-gray-950">
-      {/* Main Canvas - Central */}
-      <div className="flex-1 flex flex-col relative min-h-0">
+    <div className="h-screen flex bg-gray-50 dark:bg-gray-950">
+      {/* Main Canvas - Full Width (Chat is handled by ChatDock in AppShell) */}
+      <div className="flex-1 flex flex-col relative min-h-0 ml-80">
         {isLoadingFlow && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80">
             <div className="p-6 rounded-radius-lg bg-surface border border-border shadow-lg flex flex-col items-center gap-3">
@@ -929,14 +929,7 @@ function VisualEditorContent() {
           </Button>
           {!projectId && <div className="text-xs text-muted-foreground mt-1">Selecione um projeto para exportar</div>}
           <Separator orientation="vertical" className="h-4 md:h-6 hidden md:block" />
-          <Button
-            onClick={() => setIsChatOpen(!isChatOpen)}
-            variant={isChatOpen ? "default" : "ghost"}
-            size="sm"
-            title="AI Builder Chat"
-          >
-            <Zap className="h-3 w-3 md:h-4 md:w-4" />
-          </Button>
+
         </Panel>
 
         {/* Layout Control Panel */}
@@ -1009,94 +1002,11 @@ function VisualEditorContent() {
 
       </div>
 
-      {/* AI Builder Chat Sidebar */}
-      {isChatOpen && (
-        <div className="w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-xl z-20 flex flex-col">
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-accent-purple rounded-radius flex items-center justify-center">
-                <Zap className="h-4 w-4 text-white" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-sm">AI Builder</h3>
-                <p className="text-xs text-muted-foreground">Execução em tempo real</p>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsChatOpen(false)}
-            >
-              ✕
-            </Button>
-          </div>
 
-          <div className="flex-1 p-4 overflow-y-auto">
-            <div className="space-y-4">
-              {/* Status da execução */}
-              {currentExecution && (
-                <div className="p-3 bg-muted rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className={`w-2 h-2 rounded-full ${currentExecution.status === 'running' ? 'bg-green-500 animate-pulse' :
-                      currentExecution.status === 'completed' ? 'bg-blue-500' :
-                        'bg-red-500'
-                      }`} />
-                    <span className="text-sm font-medium capitalize">
-                      {currentExecution.status === 'running' ? 'Executando' :
-                        currentExecution.status === 'completed' ? 'Concluído' :
-                          'Falhou'}
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {runningNodes.size} nodes ativos • ID: {currentExecution.id}
-                  </div>
-                </div>
-              )}
-
-              {/* Mensagens do chat */}
-              {messages?.map((message) => (
-                <div key={message.id} className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'
-                  }`}>
-                  {message.type === 'assistant' && (
-                    <div className="w-6 h-6 bg-accent-purple rounded-full flex items-center justify-center flex-shrink-0">
-                      <Zap className="h-3 w-3 text-white" />
-                    </div>
-                  )}
-                  <div className={`max-w-[80%] p-3 rounded-lg ${message.type === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted'
-                    }`}>
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                    <span className="text-xs opacity-70 mt-1 block">
-                      {new Date(message.timestamp).toLocaleTimeString()}
-                    </span>
-                  </div>
-                  {message.type === 'user' && (
-                    <div className="w-6 h-6 bg-secondary rounded-full flex items-center justify-center flex-shrink-0">
-                      <User className="h-3 w-3" />
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {/* Placeholder quando não há mensagens */}
-              {(!messages || messages.length === 0) && !currentExecution && (
-                <div className="text-center py-8">
-                  <Zap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h4 className="font-medium mb-2">AI Builder Chat</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Clique em "Run" para iniciar a execução e ver o progresso em tempo real aqui.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Inspector Panel - Clean Sidebar */}
       {selectedNode && isInspectorOpen && (
-        <div className={`absolute ${isChatOpen ? 'right-80' : 'right-0'} top-0 bottom-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-xl z-20 overflow-y-auto`}>
+        <div className="absolute right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-xl z-20 overflow-y-auto p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold">Inspector</h3>
             <Button
