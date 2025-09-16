@@ -39,7 +39,10 @@ import {
   Settings,
   Layers,
   Zap,
-  User
+  User,
+  Sparkles,
+  Trash2,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
@@ -221,6 +224,7 @@ function VisualEditorContent() {
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
   const [currentExecution, setCurrentExecution] = useState<Execution | null>(null);
   const [lastLogSize, setLastLogSize] = useState(0);
   const [runningNodes, setRunningNodes] = useState<Set<string>>(new Set());
@@ -859,12 +863,108 @@ function VisualEditorContent() {
   );
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-    setSelectedNode(node);
-    // Only auto-open inspector on desktop (lg screens and up)
-    if (window.innerWidth >= 1024) {
-      setIsInspectorOpen(true);
+    // Handle multi-selection with Ctrl/Cmd key
+    if (event.ctrlKey || event.metaKey) {
+      setSelectedNodes(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(node.id)) {
+          newSet.delete(node.id);
+        } else {
+          newSet.add(node.id);
+        }
+        return newSet;
+      });
+    } else {
+      setSelectedNode(node);
+      setSelectedNodes(new Set([node.id]));
+      // Only auto-open inspector on desktop (lg screens and up)
+      if (window.innerWidth >= 1024) {
+        setIsInspectorOpen(true);
+      }
     }
   }, []);
+
+  // Function to delete selected nodes and their connections
+  const deleteSelectedNodes = useCallback(() => {
+    if (selectedNodes.size === 0) return;
+
+    const nodesToDelete = Array.from(selectedNodes);
+    
+    // Delete nodes from API if they have refId
+    nodesToDelete.forEach(nodeId => {
+      const node = nodes.find(n => n.id === nodeId);
+      if (node && node.data.refId) {
+        const nodeType = node.type === 'agent' ? 'agent' : 'task';
+        // Delete from API
+        if (nodeType === 'agent') {
+          apiClient.deleteAgent(String(node.data.refId)).catch(console.error);
+        } else {
+          apiClient.deleteTask(String(node.data.refId)).catch(console.error);
+        }
+      }
+    });
+
+    // Remove nodes from visual editor
+    setNodes(prevNodes => prevNodes.filter(node => !selectedNodes.has(node.id)));
+    
+    // Remove edges connected to deleted nodes
+    setEdges(prevEdges => prevEdges.filter(edge => 
+      !selectedNodes.has(edge.source) && !selectedNodes.has(edge.target)
+    ));
+
+    // Clear selection
+    setSelectedNodes(new Set());
+    setSelectedNode(null);
+    setIsInspectorOpen(false);
+
+    toast({
+      title: 'Nós eliminados',
+      description: `${nodesToDelete.length} nó${nodesToDelete.length > 1 ? 's' : ''} e suas conexões foram removidos.`,
+    });
+
+    // Refresh data
+    if (projectId) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.agents(String(projectId)) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks(String(projectId)) });
+    }
+  }, [selectedNodes, nodes, setNodes, setEdges, toast, projectId, queryClient]);
+
+  // Function to clear all nodes
+  const clearAllNodes = useCallback(() => {
+    if (nodes.length === 0) return;
+
+    // Delete all nodes from API
+    nodes.forEach(node => {
+      if (node.data.refId) {
+        const nodeType = node.type === 'agent' ? 'agent' : 'task';
+        if (nodeType === 'agent') {
+          apiClient.deleteAgent(String(node.data.refId)).catch(console.error);
+        } else {
+          apiClient.deleteTask(String(node.data.refId)).catch(console.error);
+        }
+      }
+    });
+
+    // Clear visual editor
+    setNodes([]);
+    setEdges([]);
+    setCurrentExecution(null);
+    setRunningNodes(new Set());
+    setSelectedNodes(new Set());
+    setSelectedNode(null);
+    setIsInspectorOpen(false);
+
+    toast({
+      title: 'Editor limpo',
+      description: 'Todos os workflows foram removidos do editor.',
+    });
+
+    // Refresh data
+    if (projectId) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.agents(String(projectId)) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks(String(projectId)) });
+    }
+  }, [nodes, setNodes, setEdges, toast, projectId, queryClient]);
 
   const handleRunWorkflow = () => {
     if (!projectId) {
@@ -987,6 +1087,27 @@ function VisualEditorContent() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Delete selected nodes with Delete key
+      if (event.key === 'Delete' && selectedNodes.size > 0) {
+        event.preventDefault();
+        deleteSelectedNodes();
+      }
+      
+      // Clear selection with Escape key
+      if (event.key === 'Escape') {
+        setSelectedNodes(new Set());
+        setSelectedNode(null);
+        setIsInspectorOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNodes, deleteSelectedNodes]);
+
   // Auto-fit view when nodes change
   useEffect(() => {
     if (nodes.length > 0 && reactFlowInstance) {
@@ -1025,6 +1146,7 @@ function VisualEditorContent() {
               <div>Agents: {agents.length} | Tasks: {tasks.length}</div>
               <div>Nodes: {nodes.length} | Edges: {edges.length}</div>
               <div>Running: {runningNodes.size} | Execution: {currentExecution?.status || 'none'}</div>
+              <div>Selected: {selectedNodes.size} | Inspector: {isInspectorOpen ? 'Open' : 'Closed'}</div>
             </div>
           </Panel>
         )}
@@ -1034,21 +1156,32 @@ function VisualEditorContent() {
           <div className="flex flex-col gap-2">
             <div className="flex gap-2">
               <Button
-                onClick={() => {
-                  setNodes([]);
-                  setEdges([]);
-                  setCurrentExecution(null);
-                  setRunningNodes(new Set());
-                  toast({ title: 'Editor limpo', description: 'Todos os workflows foram removidos do editor.' });
-                }}
+                onClick={clearAllNodes}
                 variant="outline"
                 size="sm"
                 title="Limpar editor"
                 className="text-xs md:text-sm"
+                disabled={nodes.length === 0}
               >
                 <RotateCcw className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
                 <span className="hidden md:inline">Limpar Editor</span>
               </Button>
+              
+              {/* Delete Selected Nodes Button */}
+              {selectedNodes.size > 0 && (
+                <Button
+                  onClick={deleteSelectedNodes}
+                  variant="destructive"
+                  size="sm"
+                  title={`Eliminar ${selectedNodes.size} nó${selectedNodes.size > 1 ? 's' : ''} selecionado${selectedNodes.size > 1 ? 's' : ''}`}
+                  className="text-xs md:text-sm"
+                >
+                  <Trash2 className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                  <span className="hidden md:inline">
+                    Eliminar ({selectedNodes.size})
+                  </span>
+                </Button>
+              )}
               <Button
                 onClick={handleRunWorkflow}
                 className="btn-primary gap-1 md:gap-2"
@@ -1207,14 +1340,10 @@ function VisualEditorContent() {
                     Abrir AI Builder
                   </Button>
                   <Button
-                    onClick={() => {
-                      setNodes([]);
-                      setEdges([]);
-                      setCurrentExecution(null);
-                      setRunningNodes(new Set());
-                    }}
+                    onClick={clearAllNodes}
                     variant="ghost"
                     size="sm"
+                    disabled={nodes.length === 0}
                   >
                     <RotateCcw className="h-4 w-4 mr-2" />
                     Limpar Editor
