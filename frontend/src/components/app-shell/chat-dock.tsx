@@ -210,6 +210,7 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
 
               // Trigger workflow execution via custom event
               setTimeout(() => {
+                console.log('Dispatching executeWorkflow event for project:', projectIdNum);
                 window.dispatchEvent(new CustomEvent('executeWorkflow', { 
                   detail: { projectId: projectIdNum } 
                 }));
@@ -224,11 +225,11 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
 
         // Update workflow in store to trigger visual editor update
         setTimeout(() => {
-          // This will trigger the workflow effect in VisualEditor
-          const workflowData = {
-            agents: res?.created_agents ? Array.from({ length: res.created_agents }, (_, i) => ({ id: `agent-${i + 1}` })) : [],
-            tasks: res?.created_tasks ? Array.from({ length: res.created_tasks }, (_, i) => ({ id: `task-${i + 1}` })) : []
-          };
+          console.log('Dispatching workflowCreated event:', {
+            agents: res?.created_agents || 0,
+            tasks: res?.created_tasks || 0,
+            projectId: projectIdNum
+          });
           
           // Trigger a custom event to notify the visual editor
           window.dispatchEvent(new CustomEvent('workflowCreated', { 
@@ -286,6 +287,7 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
       // Trigger execution via custom event
       const projectId = await getActiveProjectId();
       if (projectId) {
+        console.log('Executing workflow for project:', projectId);
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('executeWorkflow', { 
             detail: { projectId } 

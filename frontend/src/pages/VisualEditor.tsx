@@ -303,13 +303,14 @@ function VisualEditorContent() {
         type: 'agent',
         position: { x: 0, y: 0 }, // Will be calculated by layout
         data: {
-          name: agent.name,
-          role: agent.role,
+          name: agent.name || `Agent ${agent.id}`,
+          role: agent.role || 'Assistant',
           status: 'idle',
           tools: agent.tools || [],
-          memory: agent.memory,
-          delegation: agent.allow_delegation,
+          memory: agent.memory || false,
+          delegation: agent.allow_delegation || false,
           isCreating: creatingNodeIds.has(nodeId),
+          refId: agent.id, // Store original ID for API calls
         },
       };
 
@@ -343,13 +344,14 @@ function VisualEditorContent() {
         type: 'task',
         position: { x: 0, y: 0 }, // Will be calculated by layout
         data: {
-          description: task.description,
-          expectedOutput: task.expected_output,
+          description: task.description || `Task ${task.id}`,
+          expectedOutput: task.expected_output || 'Output expected',
           status: 'pending',
-          agentName: agentNode?.name,
-          async: task.async_execution,
-          outputFile: task.output_file,
+          agentName: agentNode?.name || 'Unknown Agent',
+          async: task.async_execution || false,
+          outputFile: task.output_file || '',
           isCreating: creatingNodeIds.has(taskId),
+          refId: task.id, // Store original ID for API calls
         },
       };
 
@@ -471,6 +473,16 @@ function VisualEditorContent() {
       
       // Only process if it's for the current project
       if (eventProjectId && String(eventProjectId) === String(projectId)) {
+        console.log('Workflow created event received:', { agents, tasks, projectId });
+        
+        // Add message to chat
+        addMessage({
+          id: `workflow-created-${Date.now()}`,
+          type: 'assistant',
+          content: `✅ Workflow criado com sucesso!\n\n📊 ${agents} agente${agents > 1 ? 's' : ''} e ${tasks} tarefa${tasks > 1 ? 's' : ''} criado${agents > 1 || tasks > 1 ? 's' : ''} no editor visual.`,
+          timestamp: new Date().toISOString(),
+        });
+        
         // Force refresh of agents and tasks data
         queryClient.invalidateQueries({ queryKey: queryKeys.agents(String(projectId)) });
         queryClient.invalidateQueries({ queryKey: queryKeys.tasks(String(projectId)) });
@@ -487,6 +499,16 @@ function VisualEditorContent() {
       
       // Only process if it's for the current project
       if (eventProjectId && String(eventProjectId) === String(projectId)) {
+        console.log('Executing workflow for project:', projectId);
+        
+        // Add message to chat
+        addMessage({
+          id: `exec-event-${Date.now()}`,
+          type: 'assistant',
+          content: '🎯 Executando workflow no editor visual...',
+          timestamp: new Date().toISOString(),
+        });
+        
         // Auto-execute workflow
         setTimeout(() => {
           handleRunWorkflow();
@@ -517,6 +539,8 @@ function VisualEditorContent() {
   // Update nodes when agents/tasks change
   useEffect(() => {
     if (project && (agents.length > 0 || tasks.length > 0)) {
+      console.log('Updating nodes with agents:', agents.length, 'tasks:', tasks.length);
+      
       const { nodes: newNodes, edges: newEdges } = createNodesFromData(
         agents,
         tasks,
@@ -543,8 +567,15 @@ function VisualEditorContent() {
         ...edge,
         animated: currentExecution?.status === 'running',
       })));
+      
+      // Auto-fit view when nodes are added
+      if (newNodes.length > 0) {
+        setTimeout(() => {
+          reactFlowInstance?.fitView({ padding: 0.3, duration: 400 });
+        }, 100);
+      }
     }
-  }, [project, agents, tasks, runningNodes, currentExecution, layoutDirection, createNodesFromData, setEdges, setNodes]);
+  }, [project, agents, tasks, runningNodes, currentExecution, layoutDirection, createNodesFromData, setEdges, setNodes, reactFlowInstance]);
 
   const runMutation = useMutation({
     mutationFn: (inputs: Record<string, unknown>) => apiClient.run.project(Number(projectId), { inputs, language: 'pt-br' }),
@@ -833,8 +864,16 @@ function VisualEditorContent() {
     }
 
     const inputs = {}; // TODO: collect inputs from UI if available
-    // Chat será aberto automaticamente pelo ChatDock
-    addMessage({ id: `exec-start-${Date.now()}`, type: 'assistant', content: 'Iniciando execução do workflow...', timestamp: new Date().toISOString() });
+    
+    // Add message to chat about execution starting
+    addMessage({ 
+      id: `exec-start-${Date.now()}`, 
+      type: 'assistant', 
+      content: '🚀 Iniciando execução do workflow...\n\nAgentes e tarefas serão executados em sequência.', 
+      timestamp: new Date().toISOString() 
+    });
+    
+    // Start execution
     runMutation.mutate(inputs);
   };
 
@@ -966,6 +1005,17 @@ function VisualEditorContent() {
             </div>
           </div>
         )}
+        {/* Debug Info */}
+        {process.env.NODE_ENV === 'development' && (
+          <Panel position="top-center" className="bg-yellow-100 dark:bg-yellow-900 rounded-lg shadow-lg border border-yellow-300 dark:border-yellow-700 m-4 p-2">
+            <div className="text-xs text-yellow-800 dark:text-yellow-200">
+              <div>Agents: {agents.length} | Tasks: {tasks.length}</div>
+              <div>Nodes: {nodes.length} | Edges: {edges.length}</div>
+              <div>Running: {runningNodes.size} | Execution: {currentExecution?.status || 'none'}</div>
+            </div>
+          </Panel>
+        )}
+
         {/* Clean Toolbar */}
         <Panel position="top-left" className="bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 m-4">
           <div className="flex flex-col gap-2">
@@ -1061,6 +1111,27 @@ function VisualEditorContent() {
                 <Download className="h-3 w-3 md:h-4 md:w-4" />
                 {exportMutation.isPending && <span className="ml-1 text-xs hidden md:inline">...</span>}
               </Button>
+              
+              {/* Test Button for Development */}
+              {process.env.NODE_ENV === 'development' && (
+                <Button
+                  onClick={() => {
+                    // Simulate workflow creation
+                    window.dispatchEvent(new CustomEvent('workflowCreated', { 
+                      detail: { 
+                        agents: 2, 
+                        tasks: 3,
+                        projectId: projectId 
+                      } 
+                    }));
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                >
+                  Test Workflow
+                </Button>
+              )}
             </div>
           </div>
         </Panel>
