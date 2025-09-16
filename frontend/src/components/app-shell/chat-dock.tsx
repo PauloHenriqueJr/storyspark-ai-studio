@@ -5,14 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { useChatDockStore, useProjectStore } from '@/lib/store';
+import { useChatDockStore } from '@/lib/store';
 import { apiClient, queryClient, queryKeys } from '@/lib/api';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { 
-  MessageSquare, 
-  X, 
-  Send, 
-  Sparkles, 
+import {
+  MessageSquare,
+  X,
+  Send,
+  Sparkles,
   Bot,
   User,
   Lightbulb
@@ -36,12 +36,11 @@ interface ChatMessage {
 
 export function ChatDock() {
   const { isOpen, setOpen, messages, addMessage, clearMessages } = useChatDockStore();
-  const { currentProject } = useProjectStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Only show chat in editor page
   const isInEditor = location.pathname === '/app/editor';
 
@@ -50,15 +49,12 @@ export function ChatDock() {
       const url = new URL(window.location.href);
       const fromUrl = url.searchParams.get('projectId');
       if (fromUrl) return Number(fromUrl);
-    } catch {}
-    try {
-      if (currentProject?.id) return Number(currentProject.id);
-    } catch {}
+    } catch { }
     try {
       // Fallback: get first project from API
       const res: any = await (await fetch(`${(window as any).VITE_API_BASE_URL || import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000'}/projects`)).json();
       if (Array.isArray(res) && res.length > 0 && res[0].id) return Number(res[0].id);
-    } catch {}
+    } catch { }
     return null;
   };
 
@@ -100,7 +96,7 @@ export function ChatDock() {
         // Check if similar flow exists
         try {
           const similarCheck: any = await apiClient.builder.findSimilar(projectIdNum, messageText);
-          
+
           if (similarCheck?.found) {
             // Flow already exists, just notify and refresh
             const assistantMessage: ChatMessage = {
@@ -115,7 +111,7 @@ export function ChatDock() {
               ],
             };
             addMessage(assistantMessage);
-            
+
             // Just refresh the editor
             await queryClient.invalidateQueries({ queryKey: queryKeys.agents(String(projectIdNum)) });
             await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(String(projectIdNum)) });
@@ -125,9 +121,48 @@ export function ChatDock() {
         } catch (e) {
           // Continue to create new flow if check fails
         }
-        
+
         // Create new flow
+        addMessage({
+          id: `msg-${Date.now()}-creating`,
+          type: 'assistant',
+          content: `🔄 Analisando sua solicitação: "${messageText}"\n\n⏳ Criando workflow personalizado...`,
+          timestamp: new Date().toISOString(),
+        });
+
         const res: any = await apiClient.builder.generate(projectIdNum, messageText);
+
+        // Add progress messages
+        addMessage({
+          id: `msg-${Date.now()}-progress`,
+          type: 'assistant',
+          content: `✅ Análise concluída!\n\n📋 Workflow identificado: ${res?.plan ? 'Plano detalhado gerado' : 'Workflow básico criado'}\n\n🤖 Criando agentes especializados...`,
+          timestamp: new Date().toISOString(),
+        });
+
+        // Simulate agent creation progress
+        if (res?.created_agents > 0) {
+          setTimeout(() => {
+            addMessage({
+              id: `msg-${Date.now()}-agents`,
+              type: 'assistant',
+              content: `🎯 ${res.created_agents} agente${res.created_agents > 1 ? 's' : ''} criado${res.created_agents > 1 ? 's' : ''} com sucesso!\n\n📝 Agora configurando tarefas automatizadas...`,
+              timestamp: new Date().toISOString(),
+            });
+          }, 1000);
+        }
+
+        // Simulate task creation progress
+        if (res?.created_tasks > 0) {
+          setTimeout(() => {
+            addMessage({
+              id: `msg-${Date.now()}-tasks`,
+              type: 'assistant',
+              content: `⚙️ ${res.created_tasks} tarefa${res.created_tasks > 1 ? 's' : ''} configurada${res.created_tasks > 1 ? 's' : ''}!\n\n🔗 Conectando agentes às tarefas...`,
+              timestamp: new Date().toISOString(),
+            });
+          }, 2000);
+        }
 
         // Remove markdown formatting from plan
         const cleanPlan = (res?.plan || 'Plano gerado.')
@@ -135,24 +170,62 @@ export function ChatDock() {
           .replace(/##/g, '')
           .replace(/###/g, '')
           .replace(/🎯|📊|🤖|📋|✅/g, '');
-        
-        const assistantMessage: ChatMessage = {
-          id: `msg-${Date.now()}-ai`,
-          type: 'assistant',
-          content: `Fluxo criado para o projeto ${projectIdNum}.\n\n${cleanPlan}\n\nAgentes criados: ${res?.created_agents || 0}\nTarefas criadas: ${res?.created_tasks || 0}`,
-          timestamp: new Date().toISOString(),
-          suggestions: [
-            'Executar workflow agora',
-            'Adicionar mais uma tarefa',
-            'Editar agente criado',
-          ],
-        };
-        addMessage(assistantMessage);
+
+        // Final success message
+        setTimeout(() => {
+          const assistantMessage: ChatMessage = {
+            id: `msg-${Date.now()}-ai`,
+            type: 'assistant',
+            content: `🎉 Workflow criado com sucesso!\n\n📊 **Resumo da Automação:**
+• ${res?.created_agents || 0} Agente${(res?.created_agents || 0) > 1 ? 's' : ''} Especializado${(res?.created_agents || 0) > 1 ? 's' : ''}
+• ${res?.created_tasks || 0} Tarefa${(res?.created_tasks || 0) > 1 ? 's' : ''} Automatizada${(res?.created_tasks || 0) > 1 ? 's' : ''}
+
+${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
+
+🚀 **Pronto para executar!** Clique no botão "Run" no editor visual ou diga "executar workflow" aqui.`,
+            timestamp: new Date().toISOString(),
+            suggestions: [
+              'Executar workflow agora',
+              'Adicionar mais uma tarefa',
+              'Editar agentes criados',
+              'Testar validação do fluxo',
+            ],
+          };
+          addMessage(assistantMessage);
+
+          // Auto-execute workflow after 5 seconds if user said "executar" or similar
+          const shouldAutoExecute = messageText.toLowerCase().includes('executar') ||
+            messageText.toLowerCase().includes('run') ||
+            messageText.toLowerCase().includes('execute');
+
+          if (shouldAutoExecute) {
+            setTimeout(() => {
+              addMessage({
+                id: `msg-${Date.now()}-auto-exec`,
+                type: 'assistant',
+                content: `🚀 Iniciando execução automática do workflow criado...`,
+                timestamp: new Date().toISOString(),
+              });
+
+              // Trigger workflow execution
+              setTimeout(() => {
+                // This will trigger the execution in the VisualEditor
+                if (window.location.pathname === '/app/editor') {
+                  // Simulate clicking the run button
+                  const runButton = document.querySelector('[title="Executar workflow"]') as HTMLButtonElement;
+                  if (runButton) {
+                    runButton.click();
+                  }
+                }
+              }, 1000);
+            }, 2000);
+          }
+        }, 3000);
 
         // Refresh editor data so nodes appear
         await queryClient.invalidateQueries({ queryKey: queryKeys.agents(String(projectIdNum)) });
         await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(String(projectIdNum)) });
-        
+
         // Force page reload if we're already in the editor to ensure nodes appear
         if (window.location.pathname === '/app/editor') {
           setTimeout(() => {
@@ -171,7 +244,7 @@ export function ChatDock() {
           ],
         };
         addMessage(assistantMessage);
-        try { window.history.pushState({}, '', '/app/projects'); } catch {}
+        try { window.history.pushState({}, '', '/app/projects'); } catch { }
       }
     } catch (e: any) {
       const assistantMessage: ChatMessage = {
@@ -187,7 +260,41 @@ export function ChatDock() {
   };
 
   const handleSuggestionClick = (suggestion: string) => {
-    setInputValue(suggestion);
+    if (suggestion === 'Executar workflow agora') {
+      // Trigger workflow execution
+      addMessage({
+        id: `msg-${Date.now()}-exec-request`,
+        type: 'user',
+        content: suggestion,
+        timestamp: new Date().toISOString(),
+      });
+
+      addMessage({
+        id: `msg-${Date.now()}-exec-starting`,
+        type: 'assistant',
+        content: `🚀 Executando workflow...\n\nIniciando agentes e tarefas automatizadas.`,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Trigger execution after a short delay
+      setTimeout(() => {
+        if (window.location.pathname === '/app/editor') {
+          const runButton = document.querySelector('[title="Executar workflow"]') as HTMLButtonElement;
+          if (runButton && !runButton.disabled) {
+            runButton.click();
+          } else {
+            addMessage({
+              id: `msg-${Date.now()}-exec-error`,
+              type: 'assistant',
+              content: `❌ Não foi possível executar o workflow automaticamente. Verifique se há um projeto selecionado e tente clicar no botão "Run" no editor visual.`,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+      }, 1000);
+    } else {
+      setInputValue(suggestion);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -216,7 +323,7 @@ export function ChatDock() {
   // Show button in all pages, but navigate to editor when clicked - Responsive
   if (!isOpen) {
     return (
-      <div className="fixed left-3 bottom-3 md:left-4 md:bottom-4 z-50">
+      <div className="fixed left-4 bottom-20 md:left-6 md:bottom-24 z-50">
         <Button
           onClick={async () => {
             if (!isInEditor) {
@@ -241,15 +348,10 @@ export function ChatDock() {
       </div>
     );
   }
-  
-  // Only show chat dock in editor
-  if (!isInEditor) {
-    return null;
-  }
 
   return (
     <div className={cn(
-      "fixed z-40 bg-surface border-border flex flex-col",
+      "fixed z-50 bg-surface border-border flex flex-col",
       "left-0 top-16 bottom-0 w-80 border-r shadow-xl", // Always left sidebar, starts below topbar
       "lg:w-80 xl:w-96" // Desktop widths
     )}>
@@ -274,7 +376,7 @@ export function ChatDock() {
             <X className="h-4 w-4" />
           </Button>
         </div>
-        
+
         {/* Visual feedback for editor context */}
         {isInEditor && (
           <div className="flex items-center gap-2 p-2 bg-muted rounded-lg">
@@ -300,7 +402,7 @@ export function ChatDock() {
                 Descreva o workflow que você quer automatizar e eu criarei os agentes e tarefas no editor visual.
               </p>
             </div>
-            
+
             <div className="space-y-2">
               <div className="flex items-center gap-2 mb-3">
                 <Lightbulb className="h-4 w-4 text-accent-yellow" />
@@ -332,7 +434,7 @@ export function ChatDock() {
                     <Bot className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                   </div>
                 )}
-                
+
                 <div
                   className={cn(
                     'max-w-[75%] sm:max-w-[70%] rounded-radius-lg p-2.5 sm:p-3 space-y-1.5 sm:space-y-2',
@@ -342,7 +444,7 @@ export function ChatDock() {
                   )}
                 >
                   <p className="text-xs sm:text-sm whitespace-pre-wrap">{message.content}</p>
-                  
+
                   {message.suggestions && (
                     <div className="flex flex-wrap gap-1.5 sm:gap-2 pt-1.5 sm:pt-2">
                       {message.suggestions.map((suggestion, index) => (
@@ -358,7 +460,7 @@ export function ChatDock() {
                     </div>
                   )}
                 </div>
-                
+
                 {message.type === 'user' && (
                   <div className="w-6 h-6 sm:w-8 sm:h-8 bg-secondary rounded-radius flex items-center justify-center flex-shrink-0">
                     <User className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -366,7 +468,7 @@ export function ChatDock() {
                 )}
               </div>
             ))}
-            
+
             {isLoading && (
               <div className="flex gap-2 sm:gap-3">
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-accent-purple rounded-radius flex items-center justify-center">
@@ -397,7 +499,7 @@ export function ChatDock() {
             disabled={isLoading}
           />
           <Button
-            onClick={handleSendMessage}
+            onClick={() => handleSendMessage()}
             disabled={!inputValue.trim() || isLoading}
             className="btn-primary p-1.5 sm:p-2"
           >

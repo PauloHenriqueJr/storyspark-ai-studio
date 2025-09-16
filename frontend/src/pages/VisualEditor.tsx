@@ -228,6 +228,7 @@ function VisualEditorContent() {
   const [editingNode, setEditingNode] = useState<{ label: string; description: string } | null>(null);
   const [runningNodes, setRunningNodes] = useState<Set<string>>(new Set());
   const [layoutDirection, setLayoutDirection] = useState<'TB' | 'LR'>('TB');
+  const [creatingNodes, setCreatingNodes] = useState<Set<string>>(new Set());
 
   // Get project ID from URL
   const projectId = new URLSearchParams(location.search).get('projectId');
@@ -292,7 +293,7 @@ function VisualEditorContent() {
   }, []);
 
   // Helper function to create nodes from agents and tasks
-  const createNodesFromData = useCallback((agents: Agent[], tasks: Task[], withAnimation = false) => {
+  const createNodesFromData = useCallback((agents: Agent[], tasks: Task[], withAnimation = false, creatingNodeIds = new Set<string>()) => {
     const newNodes: Node[] = [];
     const newEdges: Edge[] = [];
     let nodeIdCounter = 0;
@@ -311,6 +312,7 @@ function VisualEditorContent() {
           tools: agent.tools || [],
           memory: agent.memory,
           delegation: agent.allow_delegation,
+          isCreating: creatingNodeIds.has(nodeId),
         },
       };
 
@@ -318,6 +320,16 @@ function VisualEditorContent() {
         node.style = {
           opacity: 0,
           animation: `nodeEntry 0.5s ease-out ${index * 0.1}s forwards`,
+        };
+      }
+
+      // Add visual indicator for creating nodes
+      if (creatingNodeIds.has(nodeId)) {
+        node.style = {
+          ...node.style,
+          border: '2px solid hsl(var(--primary))',
+          boxShadow: '0 0 20px hsl(var(--primary) / 0.3)',
+          animation: 'pulse 2s infinite',
         };
       }
 
@@ -340,6 +352,7 @@ function VisualEditorContent() {
           agentName: agentNode?.name,
           async: task.async_execution,
           outputFile: task.output_file,
+          isCreating: creatingNodeIds.has(taskId),
         },
       };
 
@@ -347,6 +360,16 @@ function VisualEditorContent() {
         node.style = {
           opacity: 0,
           animation: `nodeEntry 0.5s ease-out ${(agents.length + index) * 0.1}s forwards`,
+        };
+      }
+
+      // Add visual indicator for creating nodes
+      if (creatingNodeIds.has(taskId)) {
+        node.style = {
+          ...node.style,
+          border: '2px solid hsl(var(--primary))',
+          boxShadow: '0 0 20px hsl(var(--primary) / 0.3)',
+          animation: 'pulse 2s infinite',
         };
       }
 
@@ -392,16 +415,32 @@ function VisualEditorContent() {
       setNodes([]);
       setEdges([]);
 
+      // Mark nodes as being created
+      const newCreatingNodes = new Set<string>();
+      workflow.agents.forEach(agent => {
+        newCreatingNodes.add(`agent-${agent.id}`);
+      });
+      workflow.tasks.forEach(task => {
+        newCreatingNodes.add(`task-${task.id}`);
+      });
+      setCreatingNodes(newCreatingNodes);
+
       setTimeout(() => {
         const { nodes: newNodes, edges: newEdges } = createNodesFromData(
           workflow.agents,
           workflow.tasks,
-          true // with animation
+          true, // with animation
+          newCreatingNodes // creating node ids
         );
 
         setNodes(newNodes as ReactFlowNode[]);
         setEdges(newEdges);
         setIsLoadingFlow(false);
+
+        // Clear creating state after animation
+        setTimeout(() => {
+          setCreatingNodes(new Set());
+        }, 2000);
 
         toast({
           title: 'Workflow criado',
@@ -431,7 +470,8 @@ function VisualEditorContent() {
       const { nodes: newNodes, edges: newEdges } = createNodesFromData(
         agents,
         tasks,
-        false // no animation for updates
+        false, // no animation for updates
+        new Set() // no creating nodes for updates
       );
 
       // Update status for running nodes
@@ -961,44 +1001,46 @@ function VisualEditorContent() {
         </Panel>
 
         {/* React Flow Canvas - Clean Style */}
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeClick={onNodeClick}
-          connectionMode={ConnectionMode.Loose}
-          className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900"
-          fitView
-          fitViewOptions={{ padding: 0.3 }}
-          defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
-          proOptions={{ hideAttribution: true }}
-        >
-          <Controls
-            position="bottom-left"
-            className="!bg-surface !border-border !shadow-lg"
-            showZoom={true}
-            showFitView={true}
-            showInteractive={false}
-          />
-          <MiniMap
-            position="bottom-right"
-            className="!bg-surface !border-border !rounded-radius hidden md:block"
-            nodeColor={(node) => runningNodes.has(node.id) ? 'hsl(var(--destructive))' : 'hsl(var(--primary))'}
-            maskColor="hsl(var(--muted) / 0.5)"
-            pannable
-            zoomable
-          />
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={16}
-            size={0.8}
-            color="#e5e7eb"
-            className="dark:opacity-20"
-          />
-        </ReactFlow>
+        <div className="flex-1 relative pb-20">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeClick={onNodeClick}
+            connectionMode={ConnectionMode.Loose}
+            className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900"
+            fitView
+            fitViewOptions={{ padding: 0.3 }}
+            defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+            proOptions={{ hideAttribution: true }}
+          >
+            <Controls
+              position="bottom-left"
+              className="!bg-surface !border-border !shadow-lg !bottom-6 !left-6"
+              showZoom={true}
+              showFitView={true}
+              showInteractive={false}
+            />
+            <MiniMap
+              position="bottom-right"
+              className="!bg-surface !border-border !rounded-radius !bottom-6 !right-6 hidden md:block"
+              nodeColor={(node) => runningNodes.has(node.id) ? 'hsl(var(--destructive))' : 'hsl(var(--primary))'}
+              maskColor="hsl(var(--muted) / 0.5)"
+              pannable
+              zoomable
+            />
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={16}
+              size={0.8}
+              color="#e5e7eb"
+              className="dark:opacity-20"
+            />
+          </ReactFlow>
+        </div>
 
       </div>
 

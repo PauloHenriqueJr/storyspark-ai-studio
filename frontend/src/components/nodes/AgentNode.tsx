@@ -11,6 +11,8 @@ export interface AgentNodeData {
   tools?: string[];
   memory?: boolean;
   delegation?: boolean;
+  isCreating?: boolean;
+  isRunning?: boolean;
 }
 
 const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
@@ -44,11 +46,30 @@ const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
     <div
       className={cn(
         "bg-white dark:bg-gray-900 rounded-xl shadow-md border-2 transition-all duration-200",
-        "min-w-[240px] max-w-[280px]",
+        "min-w-[240px] max-w-[280px] relative",
         selected ? "border-primary shadow-lg scale-105" : "border-gray-200 dark:border-gray-700",
-        data.status === 'running' && "animate-pulse"
+        data.status === 'running' && "animate-pulse",
+        data.isCreating && "border-primary shadow-lg animate-pulse",
+        data.isRunning && "border-blue-500 shadow-lg animate-pulse"
       )}
     >
+      {/* AI Creation Indicator */}
+      {data.isCreating && (
+        <div className="absolute -top-2 -right-2 z-10">
+          <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg animate-bounce">
+            <Zap className="w-3 h-3 text-white" />
+          </div>
+        </div>
+      )}
+
+      {/* Running Indicator */}
+      {data.isRunning && (
+        <div className="absolute -top-2 -left-2 z-10">
+          <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center shadow-lg">
+            <div className="w-2 h-2 bg-white rounded-full animate-ping" />
+          </div>
+        </div>
+      )}
       {/* Handle for incoming connections (top) */}
       <Handle
         type="target"
@@ -77,8 +98,8 @@ const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
 
       {/* Status Badge */}
       <div className="px-3 pb-2">
-        <Badge 
-          variant="secondary" 
+        <Badge
+          variant="secondary"
           className={cn(
             "text-[10px] px-2 py-0.5",
             data.status === 'running' && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
@@ -96,7 +117,7 @@ const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
         <div className="px-3 pb-2">
           <div className="flex flex-wrap gap-1">
             {data.tools.slice(0, 3).map((tool, idx) => (
-              <span 
+              <span
                 key={idx}
                 className="text-[10px] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-gray-600 dark:text-gray-400"
               >

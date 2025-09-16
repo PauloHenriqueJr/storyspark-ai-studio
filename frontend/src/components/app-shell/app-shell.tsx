@@ -22,23 +22,23 @@ export const AppShell = ({ children }: AppShellProps) => {
       if (!token) {
         window.location.href = '/auth';
       }
-    } catch {}
+    } catch { }
   }, []);
 
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar */}
-      <Sidebar 
+      <Sidebar
         isCollapsed={isMobile ? false : isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         className={cn(
           isMobile && "hidden" // Hide on mobile, will use drawer later
         )}
       />
-      
+
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Topbar 
+        <Topbar
           onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           isSidebarCollapsed={isSidebarCollapsed}
         />
