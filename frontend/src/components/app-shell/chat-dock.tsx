@@ -208,14 +208,14 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
                 timestamp: new Date().toISOString(),
               });
 
-              // Trigger workflow execution via custom event
+              // Trigger workflow execution via custom event (only once)
               setTimeout(() => {
                 console.log('Dispatching executeWorkflow event for project:', projectIdNum);
                 window.dispatchEvent(new CustomEvent('executeWorkflow', { 
                   detail: { projectId: projectIdNum } 
                 }));
-              }, 1000);
-            }, 2000);
+              }, 2000); // Increased delay to ensure workflow is fully created
+            }, 3000); // Increased delay to ensure all creation messages are shown
           }
         }, 3000);
 
@@ -292,7 +292,7 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
           window.dispatchEvent(new CustomEvent('executeWorkflow', { 
             detail: { projectId } 
           }));
-        }, 1000);
+        }, 1500); // Increased delay to prevent multiple executions
       } else {
         addMessage({
           id: `msg-${Date.now()}-exec-error`,
@@ -334,6 +334,7 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
     return (
       <div className="fixed left-4 bottom-20 md:left-6 md:bottom-24 z-50">
         <Button
+          data-chat-button
           onClick={async () => {
             if (!isInEditor) {
               const pid = await getActiveProjectId();

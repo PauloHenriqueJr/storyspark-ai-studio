@@ -242,6 +242,12 @@ function VisualEditorContent() {
         } catch (e) {
           console.error('Failed to load projects:', e);
         }
+      } else {
+        // Clear editor when project changes
+        setNodes([]);
+        setEdges([]);
+        setCurrentExecution(null);
+        setRunningNodes(new Set());
       }
     };
     checkAndRedirect();
@@ -457,14 +463,15 @@ function VisualEditorContent() {
     const lastMessage = messages[messages.length - 1];
     if (lastMessage && lastMessage.type === 'assistant' && 
         (lastMessage.content.includes('Executando workflow') || 
-         lastMessage.content.includes('Iniciando execução'))) {
+         lastMessage.content.includes('Iniciando execução')) &&
+        !currentExecution) { // Only execute if no execution is running
       
       // Auto-execute workflow after chat message
       setTimeout(() => {
         handleRunWorkflow();
       }, 1000);
     }
-  }, [messages]);
+  }, [messages, currentExecution]);
 
   // Listen for workflow creation events from chat
   useEffect(() => {
@@ -475,11 +482,17 @@ function VisualEditorContent() {
       if (eventProjectId && String(eventProjectId) === String(projectId)) {
         console.log('Workflow created event received:', { agents, tasks, projectId });
         
+        // Clear existing workflow first
+        setNodes([]);
+        setEdges([]);
+        setCurrentExecution(null);
+        setRunningNodes(new Set());
+        
         // Add message to chat
         addMessage({
           id: `workflow-created-${Date.now()}`,
           type: 'assistant',
-          content: `✅ Workflow criado com sucesso!\n\n📊 ${agents} agente${agents > 1 ? 's' : ''} e ${tasks} tarefa${tasks > 1 ? 's' : ''} criado${agents > 1 || tasks > 1 ? 's' : ''} no editor visual.`,
+          content: `✅ Novo workflow criado com sucesso!\n\n📊 ${agents} agente${agents > 1 ? 's' : ''} e ${tasks} tarefa${tasks > 1 ? 's' : ''} criado${agents > 1 || tasks > 1 ? 's' : ''} no editor visual.\n\n🔄 Editor limpo e novo fluxo carregado.`,
           timestamp: new Date().toISOString(),
         });
         
@@ -488,8 +501,8 @@ function VisualEditorContent() {
         queryClient.invalidateQueries({ queryKey: queryKeys.tasks(String(projectId)) });
         
         toast({
-          title: 'Workflow atualizado',
-          description: `${agents} agentes e ${tasks} tarefas foram criados no editor.`,
+          title: 'Novo Workflow Criado',
+          description: `Editor limpo e ${agents} agentes + ${tasks} tarefas carregados.`,
         });
       }
     };
@@ -497,8 +510,8 @@ function VisualEditorContent() {
     const handleExecuteWorkflow = (event: CustomEvent) => {
       const { projectId: eventProjectId } = event.detail;
       
-      // Only process if it's for the current project
-      if (eventProjectId && String(eventProjectId) === String(projectId)) {
+      // Only process if it's for the current project and no execution is running
+      if (eventProjectId && String(eventProjectId) === String(projectId) && !currentExecution) {
         console.log('Executing workflow for project:', projectId);
         
         // Add message to chat
@@ -1024,15 +1037,17 @@ function VisualEditorContent() {
                 onClick={() => {
                   setNodes([]);
                   setEdges([]);
-                  toast({ title: 'Fluxo limpo', description: 'Todos os cards e conexões foram removidos.' });
+                  setCurrentExecution(null);
+                  setRunningNodes(new Set());
+                  toast({ title: 'Editor limpo', description: 'Todos os workflows foram removidos do editor.' });
                 }}
                 variant="outline"
                 size="sm"
-                title="Limpar fluxo"
+                title="Limpar editor"
                 className="text-xs md:text-sm"
               >
                 <RotateCcw className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
-                <span className="hidden md:inline">Limpar</span>
+                <span className="hidden md:inline">Limpar Editor</span>
               </Button>
               <Button
                 onClick={handleRunWorkflow}
@@ -1166,6 +1181,49 @@ function VisualEditorContent() {
 
         {/* React Flow Canvas - Clean Style */}
         <div className="flex-1 relative pb-20">
+          {/* Empty State */}
+          {nodes.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center z-10">
+              <div className="text-center p-8 bg-white/90 dark:bg-gray-900/90 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Layers className="h-8 w-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                  Editor Visual Vazio
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  Use o chat AI Builder para criar workflows ou clique em "Limpar Editor" para começar.
+                </p>
+                <div className="flex gap-2 justify-center">
+                  <Button
+                    onClick={() => {
+                      const chatButton = document.querySelector('[data-chat-button]') as HTMLButtonElement;
+                      if (chatButton) chatButton.click();
+                    }}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Abrir AI Builder
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setNodes([]);
+                      setEdges([]);
+                      setCurrentExecution(null);
+                      setRunningNodes(new Set());
+                    }}
+                    variant="ghost"
+                    size="sm"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Limpar Editor
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <ReactFlow
             nodes={nodes}
             edges={edges}
