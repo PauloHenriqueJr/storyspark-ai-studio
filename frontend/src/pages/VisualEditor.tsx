@@ -226,6 +226,10 @@ function VisualEditorContent() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
   const [currentExecution, setCurrentExecution] = useState<Execution | null>(null);
+  
+  // State for execution control
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
   const [lastLogSize, setLastLogSize] = useState(0);
   const [runningNodes, setRunningNodes] = useState<Set<string>>(new Set());
   const [layoutDirection, setLayoutDirection] = useState<'TB' | 'LR'>('TB');
@@ -482,9 +486,11 @@ function VisualEditorContent() {
     const handleWorkflowCreated = (event: CustomEvent) => {
       const { agents, tasks, projectId: eventProjectId } = event.detail;
       
-      // Only process if it's for the current project
-      if (eventProjectId && String(eventProjectId) === String(projectId)) {
+      // Only process if it's for the current project and not already creating
+      if (eventProjectId && String(eventProjectId) === String(projectId) && !isCreatingWorkflow) {
         console.log('Workflow created event received:', { agents, tasks, projectId });
+        
+        setIsCreatingWorkflow(true);
         
         // Clear existing workflow first
         setNodes([]);
@@ -508,6 +514,11 @@ function VisualEditorContent() {
           title: 'Novo Workflow Criado',
           description: `Editor limpo e ${agents} agentes + ${tasks} tarefas carregados.`,
         });
+        
+        // Reset creation state after a delay
+        setTimeout(() => {
+          setIsCreatingWorkflow(false);
+        }, 2000);
       }
     };
 
@@ -515,8 +526,10 @@ function VisualEditorContent() {
       const { projectId: eventProjectId } = event.detail;
       
       // Only process if it's for the current project and no execution is running
-      if (eventProjectId && String(eventProjectId) === String(projectId) && !currentExecution) {
+      if (eventProjectId && String(eventProjectId) === String(projectId) && !currentExecution && !isExecuting) {
         console.log('Executing workflow for project:', projectId);
+        
+        setIsExecuting(true);
         
         // Add message to chat
         addMessage({
@@ -540,7 +553,7 @@ function VisualEditorContent() {
       window.removeEventListener('workflowCreated', handleWorkflowCreated as EventListener);
       window.removeEventListener('executeWorkflow', handleExecuteWorkflow as EventListener);
     };
-  }, [projectId, queryClient, toast]);
+  }, [projectId, queryClient, toast, isCreatingWorkflow, isExecuting]);
 
   // Auto-refresh when agents/tasks change
   useEffect(() => {
@@ -549,9 +562,22 @@ function VisualEditorContent() {
         await queryClient.invalidateQueries({ queryKey: queryKeys.agents(projectId) });
         await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
       }
-    }, 2000); // Poll every 2 seconds for better real-time updates
+    }, 3000); // Poll every 3 seconds for better real-time updates
     return () => clearInterval(interval);
   }, [projectId, queryClient]);
+
+  // Cleanup execution state when execution completes
+  useEffect(() => {
+    if (currentExecution?.status === 'completed' || currentExecution?.status === 'failed') {
+      const timer = setTimeout(() => {
+        setCurrentExecution(null);
+        setIsExecuting(false);
+        setRunningNodes(new Set());
+      }, 5000); // Clear after 5 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, [currentExecution]);
 
   // Update nodes when agents/tasks change
   useEffect(() => {
@@ -598,6 +624,7 @@ function VisualEditorContent() {
     mutationFn: (inputs: Record<string, unknown>) => apiClient.run.project(Number(projectId), { inputs, language: 'pt-br' }),
     onSuccess: (data: Execution) => {
       setCurrentExecution(data);
+      setIsExecuting(false);
       // Chat será aberto automaticamente pelo ChatDock
       addMessage({ id: `exec-id-${data.id}`, type: 'assistant', content: `Execução iniciada (ID: ${data.id}).`, timestamp: new Date().toISOString() });
       toast({
@@ -606,6 +633,7 @@ function VisualEditorContent() {
       });
     },
     onError: (error: Error) => {
+      setIsExecuting(false);
       toast({
         title: "Erro",
         description: "Falha ao executar workflow",
@@ -976,6 +1004,15 @@ function VisualEditorContent() {
       return;
     }
 
+    if (isExecuting || currentExecution) {
+      toast({
+        title: "Execução em andamento",
+        description: "Aguarde a execução atual terminar",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const inputs = {}; // TODO: collect inputs from UI if available
     
     // Add message to chat about execution starting
@@ -1139,6 +1176,35 @@ function VisualEditorContent() {
             </div>
           </div>
         )}
+        {/* Status Panel */}
+        {(isCreatingWorkflow || isExecuting || currentExecution) && (
+          <Panel position="top-center" className="bg-green-100 dark:bg-green-900 rounded-lg shadow-lg border border-green-300 dark:border-green-700 m-4 p-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                {isCreatingWorkflow ? (
+                  <Sparkles className="h-4 w-4 text-white animate-pulse" />
+                ) : isExecuting ? (
+                  <Zap className="h-4 w-4 text-white animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4 text-white" />
+                )}
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-green-800 dark:text-green-200">
+                  {isCreatingWorkflow ? 'Criando Workflow...' : 
+                   isExecuting ? 'Executando Workflow...' : 
+                   'Workflow em Execução'}
+                </div>
+                <div className="text-xs text-green-600 dark:text-green-300">
+                  {isCreatingWorkflow ? 'Aguarde enquanto o novo fluxo é criado' :
+                   isExecuting ? 'Processando agentes e tarefas' :
+                   `ID: ${currentExecution?.id} - Status: ${currentExecution?.status}`}
+                </div>
+              </div>
+            </div>
+          </Panel>
+        )}
+
         {/* Selection Panel */}
         {selectedNodes.size > 0 && (
           <Panel position="top-center" className="bg-blue-100 dark:bg-blue-900 rounded-lg shadow-lg border border-blue-300 dark:border-blue-700 m-4 p-3">
@@ -1204,6 +1270,7 @@ function VisualEditorContent() {
         {/* Clean Toolbar */}
         <Panel position="top-left" className="bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 m-4">
           <div className="flex flex-col gap-2">
+            {/* Main Actions */}
             <div className="flex gap-2">
               <Button
                 onClick={clearAllNodes}
@@ -1217,112 +1284,126 @@ function VisualEditorContent() {
                 <span className="hidden md:inline">Limpar Editor</span>
               </Button>
               
-              {/* Select All Button */}
-              {nodes.length > 0 && selectedNodes.size < nodes.length && (
-                <div className="flex gap-1">
-                  <Button
-                    onClick={() => {
-                      const allNodeIds = nodes.map(node => node.id);
-                      setSelectedNodes(new Set(allNodeIds));
-                      setSelectedNode(null);
-                      setIsInspectorOpen(false);
-                    }}
-                    variant="outline"
-                    size="sm"
-                    title="Selecionar todos os nós"
-                    className="text-xs md:text-sm"
-                  >
-                    <CheckSquare className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
-                    <span className="hidden md:inline">Todos</span>
-                  </Button>
-                  
-                  {/* Select Agents Only */}
-                  {nodes.some(node => node.type === 'agent') && (
-                    <Button
-                      onClick={() => {
-                        const agentNodeIds = nodes.filter(node => node.type === 'agent').map(node => node.id);
-                        setSelectedNodes(new Set(agentNodeIds));
-                        setSelectedNode(null);
-                        setIsInspectorOpen(false);
-                      }}
-                      variant="outline"
-                      size="sm"
-                      title="Selecionar apenas agentes"
-                      className="text-xs md:text-sm"
-                    >
-                      <Users className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
-                      <span className="hidden md:inline">Agentes</span>
-                    </Button>
-                  )}
-                  
-                  {/* Select Tasks Only */}
-                  {nodes.some(node => node.type === 'task') && (
-                    <Button
-                      onClick={() => {
-                        const taskNodeIds = nodes.filter(node => node.type === 'task').map(node => node.id);
-                        setSelectedNodes(new Set(taskNodeIds));
-                        setSelectedNode(null);
-                        setIsInspectorOpen(false);
-                      }}
-                      variant="outline"
-                      size="sm"
-                      title="Selecionar apenas tasks"
-                      className="text-xs md:text-sm"
-                    >
-                      <CheckSquare className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
-                      <span className="hidden md:inline">Tasks</span>
-                    </Button>
-                  )}
-                </div>
-              )}
-
-              {/* Clear Selection Button */}
-              {selectedNodes.size > 0 && (
-                <Button
-                  onClick={() => {
-                    setSelectedNodes(new Set());
-                    setSelectedNode(null);
-                    setIsInspectorOpen(false);
-                  }}
-                  variant="outline"
-                  size="sm"
-                  title="Limpar seleção"
-                  className="text-xs md:text-sm"
-                >
-                  <X className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
-                  <span className="hidden md:inline">Limpar Seleção</span>
-                </Button>
-              )}
-
-              {/* Delete Selected Nodes Button */}
-              {selectedNodes.size > 0 && (
-                <Button
-                  onClick={deleteSelectedNodes}
-                  variant="destructive"
-                  size="sm"
-                  title={`Eliminar ${selectedNodes.size} nó${selectedNodes.size > 1 ? 's' : ''} selecionado${selectedNodes.size > 1 ? 's' : ''}`}
-                  className="text-xs md:text-sm"
-                >
-                  <Trash2 className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
-                  <span className="hidden md:inline">
-                    Eliminar ({selectedNodes.size})
-                  </span>
-                </Button>
-              )}
+              
+              {/* Separator */}
+              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+              
               <Button
                 onClick={handleRunWorkflow}
                 className="btn-primary gap-1 md:gap-2"
                 size="sm"
-                disabled={runMutation.isPending || !projectId || currentExecution?.status === 'running'}
+                disabled={runMutation.isPending || !projectId || currentExecution?.status === 'running' || isExecuting || isCreatingWorkflow}
                 title={!projectId ? "Selecione um projeto primeiro" : "Executar workflow"}
               >
                 <Play className="h-3 w-3 md:h-4 md:w-4" />
                 <span className="text-xs md:text-sm">
-                  {runMutation.isPending ? 'Run...' : 
-                   currentExecution?.status === 'running' ? 'Running...' : 'Run'}
+                  {runMutation.isPending || isExecuting ? 'Executando...' : 
+                   isCreatingWorkflow ? 'Criando...' :
+                   currentExecution?.status === 'running' ? 'Executando...' : 'Executar'}
                 </span>
               </Button>
             </div>
+            
+            {/* Selection Actions */}
+            {nodes.length > 0 && (
+              <>
+                <Separator className="my-1" />
+                <div className="flex gap-2">
+                  {/* Select All Button */}
+                  {selectedNodes.size < nodes.length && (
+                    <div className="flex gap-1">
+                      <Button
+                        onClick={() => {
+                          const allNodeIds = nodes.map(node => node.id);
+                          setSelectedNodes(new Set(allNodeIds));
+                          setSelectedNode(null);
+                          setIsInspectorOpen(false);
+                        }}
+                        variant="outline"
+                        size="sm"
+                        title="Selecionar todos os nós"
+                        className="text-xs md:text-sm"
+                      >
+                        <CheckSquare className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                        <span className="hidden md:inline">Todos</span>
+                      </Button>
+                      
+                      {/* Select Agents Only */}
+                      {nodes.some(node => node.type === 'agent') && (
+                        <Button
+                          onClick={() => {
+                            const agentNodeIds = nodes.filter(node => node.type === 'agent').map(node => node.id);
+                            setSelectedNodes(new Set(agentNodeIds));
+                            setSelectedNode(null);
+                            setIsInspectorOpen(false);
+                          }}
+                          variant="outline"
+                          size="sm"
+                          title="Selecionar apenas agentes"
+                          className="text-xs md:text-sm"
+                        >
+                          <Users className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                          <span className="hidden md:inline">Agentes</span>
+                        </Button>
+                      )}
+                      
+                      {/* Select Tasks Only */}
+                      {nodes.some(node => node.type === 'task') && (
+                        <Button
+                          onClick={() => {
+                            const taskNodeIds = nodes.filter(node => node.type === 'task').map(node => node.id);
+                            setSelectedNodes(new Set(taskNodeIds));
+                            setSelectedNode(null);
+                            setIsInspectorOpen(false);
+                          }}
+                          variant="outline"
+                          size="sm"
+                          title="Selecionar apenas tasks"
+                          className="text-xs md:text-sm"
+                        >
+                          <CheckSquare className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                          <span className="hidden md:inline">Tasks</span>
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Clear Selection Button */}
+                  {selectedNodes.size > 0 && (
+                    <Button
+                      onClick={() => {
+                        setSelectedNodes(new Set());
+                        setSelectedNode(null);
+                        setIsInspectorOpen(false);
+                      }}
+                      variant="outline"
+                      size="sm"
+                      title="Limpar seleção"
+                      className="text-xs md:text-sm"
+                    >
+                      <X className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                      <span className="hidden md:inline">Limpar Seleção</span>
+                    </Button>
+                  )}
+
+                  {/* Delete Selected Nodes Button */}
+                  {selectedNodes.size > 0 && (
+                    <Button
+                      onClick={deleteSelectedNodes}
+                      variant="destructive"
+                      size="sm"
+                      title={`Eliminar ${selectedNodes.size} nó${selectedNodes.size > 1 ? 's' : ''} selecionado${selectedNodes.size > 1 ? 's' : ''}`}
+                      className="text-xs md:text-sm"
+                    >
+                      <Trash2 className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                      <span className="hidden md:inline">
+                        Eliminar ({selectedNodes.size})
+                      </span>
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
             
             {/* Execution Status */}
             {currentExecution && (

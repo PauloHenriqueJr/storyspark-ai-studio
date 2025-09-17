@@ -214,7 +214,7 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
                 window.dispatchEvent(new CustomEvent('executeWorkflow', { 
                   detail: { projectId: projectIdNum } 
                 }));
-              }, 2000); // Increased delay to ensure workflow is fully created
+              }, 3000); // Increased delay to ensure workflow is fully created
             }, 3000); // Increased delay to ensure all creation messages are shown
           }
         }, 3000);
