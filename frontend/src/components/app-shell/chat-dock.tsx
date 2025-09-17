@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { useChatDockStore, useExecutionControlStore } from '@/lib/store';
+import { useChatDockStore } from '@/lib/store';
 import { apiClient, queryClient, queryKeys } from '@/lib/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -36,11 +36,16 @@ interface ChatMessage {
 
 export function ChatDock() {
   const { isOpen, setOpen, messages, addMessage, clearMessages } = useChatDockStore();
-  const { canExecute, canCreateWorkflow, setIsExecuting, setIsCreatingWorkflow } = useExecutionControlStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
+
+  // Simple execution control functions
+  const canExecute = () => !isExecuting && !isCreatingWorkflow;
+  const canCreateWorkflow = () => !isExecuting && !isCreatingWorkflow;
 
   // Only show chat in editor page
   const isInEditor = location.pathname === '/app/editor';
@@ -212,8 +217,8 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
               // Trigger workflow execution via custom event (only once)
               setTimeout(() => {
                 console.log('Dispatching executeWorkflow event for project:', projectIdNum);
-                window.dispatchEvent(new CustomEvent('executeWorkflow', { 
-                  detail: { projectId: projectIdNum } 
+                window.dispatchEvent(new CustomEvent('executeWorkflow', {
+                  detail: { projectId: projectIdNum }
                 }));
               }, 3000); // Increased delay to ensure workflow is fully created
             }, 3000); // Increased delay to ensure all creation messages are shown
@@ -231,14 +236,14 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
             tasks: res?.created_tasks || 0,
             projectId: projectIdNum
           });
-          
+
           // Trigger a custom event to notify the visual editor
-          window.dispatchEvent(new CustomEvent('workflowCreated', { 
-            detail: { 
-              agents: res?.created_agents || 0, 
+          window.dispatchEvent(new CustomEvent('workflowCreated', {
+            detail: {
+              agents: res?.created_agents || 0,
               tasks: res?.created_tasks || 0,
-              projectId: projectIdNum 
-            } 
+              projectId: projectIdNum
+            }
           }));
         }, 1000);
       } else {
@@ -290,8 +295,8 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
       if (projectId && canExecute()) {
         console.log('Executing workflow for project:', projectId);
         setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('executeWorkflow', { 
-            detail: { projectId } 
+          window.dispatchEvent(new CustomEvent('executeWorkflow', {
+            detail: { projectId }
           }));
         }, 1500); // Increased delay to prevent multiple executions
       } else {
