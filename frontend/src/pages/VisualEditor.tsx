@@ -970,7 +970,7 @@ function VisualEditorContent() {
                 const cleanedLine = line
                   .replace(/\*\*/g, '')
                   .replace(/[🎯✅📋🔧💡🤖]/gu, '')
-                  .replace(/\x1b\[[0-9;]*[mGKHFJ]/g, '') // Remove ANSI escape codes
+                  .replace(/\u001b\[[0-9;]*[mGKHFJ]/g, '') // Remove ANSI escape codes
                   .replace(/[│┌┐└┘├┤┬┴┼─│]/g, '') // Remove box drawing characters
                   .replace(/\s+/g, ' ') // Normalize whitespace
                   .trim();
