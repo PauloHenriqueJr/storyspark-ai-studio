@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { CheckSquare, FileText, Clock, AlertCircle } from 'lucide-react';
+import { CheckSquare, FileText, Clock, AlertCircle, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -19,7 +19,7 @@ const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
   const getStatusColor = () => {
     switch (data.status) {
       case 'running':
-        return 'bg-blue-500';
+        return 'bg-blue-500 animate-pulse';
       case 'completed':
         return 'bg-green-500';
       case 'failed':
@@ -32,13 +32,26 @@ const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
   const getStatusText = () => {
     switch (data.status) {
       case 'running':
-        return 'Running';
+        return 'Executando...';
       case 'completed':
-        return 'Completed';
+        return 'Concluída';
       case 'failed':
-        return 'Failed';
+        return 'Falhou';
       default:
-        return 'Pending';
+        return 'Aguardando';
+    }
+  };
+
+  const getStatusIcon = () => {
+    switch (data.status) {
+      case 'running':
+        return <Zap className="h-3 w-3 animate-spin" />;
+      case 'completed':
+        return <CheckSquare className="h-3 w-3" />;
+      case 'failed':
+        return <AlertCircle className="h-3 w-3" />;
+      default:
+        return <Clock className="h-3 w-3" />;
     }
   };
 
@@ -103,8 +116,10 @@ const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
               data.status === 'failed' && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
             )}
           >
-            <div className={cn("w-1.5 h-1.5 rounded-full mr-1.5", getStatusColor())} />
-            {getStatusText()}
+            <div className="flex items-center gap-1.5">
+              {getStatusIcon()}
+              {getStatusText()}
+            </div>
           </Badge>
           {data.async && (
             <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">
