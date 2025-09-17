@@ -3,6 +3,7 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { Users, Bot, Brain, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useExecutionControlStore } from '@/lib/store';
 
 export interface AgentNodeData {
   name: string;
@@ -16,10 +17,15 @@ export interface AgentNodeData {
 }
 
 const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
+  const { nodeStates } = useExecutionControlStore();
+  
+  // Use global state if available, fallback to local data
+  const nodeState = nodeStates[data.name] || data.status || 'idle';
+  
   // Debug: Log status changes
-  console.log('AgentNode render:', { id: data.name, status: data.status });
+  console.log('AgentNode render:', { id: data.name, localStatus: data.status, globalStatus: nodeState });
   const getStatusColor = () => {
-    switch (data.status) {
+    switch (nodeState) {
       case 'running':
         return 'bg-blue-500 animate-pulse';
       case 'completed':
@@ -32,7 +38,7 @@ const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
   };
 
   const getStatusText = () => {
-    switch (data.status) {
+    switch (nodeState) {
       case 'running':
         return 'Executando...';
       case 'completed':
@@ -45,7 +51,7 @@ const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
   };
 
   const getStatusIcon = () => {
-    switch (data.status) {
+    switch (nodeState) {
       case 'running':
         return <Zap className="h-3 w-3 animate-spin" />;
       case 'completed':
@@ -63,10 +69,10 @@ const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
         "bg-white dark:bg-gray-900 rounded-xl shadow-md border-2 transition-all duration-200",
         "min-w-[240px] max-w-[280px] relative",
         selected ? "border-primary shadow-lg scale-105" : "border-gray-200 dark:border-gray-700",
-        data.status === 'running' && "border-blue-500 shadow-blue-200 dark:shadow-blue-900/20",
-        data.status === 'completed' && "border-green-500 shadow-green-200 dark:shadow-green-900/20",
-        data.status === 'failed' && "border-red-500 shadow-red-200 dark:shadow-red-900/20",
-        data.status === 'running' && "animate-pulse",
+        nodeState === 'running' && "border-blue-500 shadow-blue-200 dark:shadow-blue-900/20",
+        nodeState === 'completed' && "border-green-500 shadow-green-200 dark:shadow-green-900/20",
+        nodeState === 'failed' && "border-red-500 shadow-red-200 dark:shadow-red-900/20",
+        nodeState === 'running' && "animate-pulse",
         data.isCreating && "border-primary shadow-lg animate-pulse",
         data.isRunning && "border-blue-500 shadow-lg animate-pulse"
       )}
@@ -115,7 +121,7 @@ const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
       </div>
 
       {/* Running Overlay */}
-      {data.status === 'running' && (
+      {nodeState === 'running' && (
         <div className="absolute inset-0 bg-blue-500/10 rounded-xl pointer-events-none">
           <div className="absolute top-2 right-2">
             <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
@@ -129,9 +135,9 @@ const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
           variant="secondary"
           className={cn(
             "text-[10px] px-2 py-0.5",
-            data.status === 'running' && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-            data.status === 'completed' && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-            data.status === 'failed' && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+            nodeState === 'running' && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+            nodeState === 'completed' && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+            nodeState === 'failed' && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
           )}
         >
           <div className="flex items-center gap-1.5">

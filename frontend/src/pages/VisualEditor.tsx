@@ -222,6 +222,10 @@ function VisualEditorContent() {
     isCreatingWorkflow: globalIsCreatingWorkflow,
     setIsExecuting: setGlobalIsExecuting,
     setIsCreatingWorkflow: setGlobalIsCreatingWorkflow,
+    setExecutionId,
+    nodeStates,
+    setNodeState,
+    resetNodeStates,
     canExecute,
     canCreateWorkflow
   } = useExecutionControlStore();
@@ -574,52 +578,64 @@ function VisualEditorContent() {
     return () => clearInterval(interval);
   }, [projectId, queryClient]);
 
-  // Real-time execution status polling
+  // Robust execution status polling
   useEffect(() => {
-    if (!currentExecution || currentExecution.status !== 'running') return;
+    if (!currentExecution || !currentExecution.id) return;
 
+    let pollCount = 0;
+    const maxPolls = 60; // Maximum 2 minutes of polling
+    
     const executionInterval = setInterval(async () => {
       try {
+        pollCount++;
+        
         // Fetch execution status
         const executionData = await apiClient.getExecution(currentExecution.id);
         setCurrentExecution(executionData);
 
-        // Update running nodes based on execution status
         if (executionData.status === 'running') {
-          // Simulate running nodes based on execution progress
+          // Simulate progressive node completion
           const allNodeIds = nodes.map(node => node.id);
-          const runningCount = Math.min(Math.floor(Math.random() * allNodeIds.length) + 1, allNodeIds.length);
-          const runningNodeIds = allNodeIds.slice(0, runningCount);
-          setRunningNodes(new Set(runningNodeIds));
+          const progress = Math.min(pollCount / 10, 1); // Progress over 20 polls (40 seconds)
+          const completedCount = Math.floor(progress * allNodeIds.length);
           
-          // Force update nodes with running status
-          setNodes(prevNodes => prevNodes.map(node => {
-            if (runningNodeIds.includes(node.id)) {
-              return {
-                ...node,
-                data: {
-                  ...node.data,
-                  status: 'running',
-                },
-              };
+          // Update node states progressively
+          allNodeIds.forEach((nodeId, index) => {
+            if (index < completedCount) {
+              setNodeState(nodeId, 'completed');
+            } else {
+              setNodeState(nodeId, 'running');
             }
-            return node;
+          });
+          
+          // Update visual nodes
+          setNodes(prevNodes => prevNodes.map(node => {
+            const nodeState = nodeStates[node.id] || 'running';
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                status: nodeState,
+              },
+            };
           }));
           
-          // Add progress message to chat
-          if (runningCount > 0 && runningCount !== runningNodes.size) {
+          // Add progress message every 5 polls
+          if (pollCount % 5 === 0) {
             addMessage({
               id: `exec-progress-${Date.now()}`,
               type: 'assistant',
-              content: `⚡ **Progresso da Execução:**\n\n📊 **Componentes ativos:** ${runningCount}/${allNodeIds.length}\n🔄 **Status:** Executando...\n\n👀 **Visualização:** Os cards com animação estão sendo processados agora!`,
+              content: `⚡ **Progresso da Execução:**\n\n📊 **Componentes concluídos:** ${completedCount}/${allNodeIds.length}\n🔄 **Status:** Executando...\n⏱️ **Tempo:** ${pollCount * 2}s\n\n👀 **Visualização:** Cards azuis = executando, verdes = concluídos!`,
               timestamp: new Date().toISOString(),
             });
           }
-        } else if (executionData.status === 'completed') {
-          setRunningNodes(new Set());
-          setGlobalIsExecuting(false);
           
-          // Update all nodes to completed status
+        } else if (executionData.status === 'completed') {
+          // Mark all nodes as completed
+          nodes.forEach(node => {
+            setNodeState(node.id, 'completed');
+          });
+          
           setNodes(prevNodes => prevNodes.map(node => ({
             ...node,
             data: {
@@ -628,43 +644,91 @@ function VisualEditorContent() {
             },
           })));
           
+          setGlobalIsExecuting(false);
+          setExecutionId(null);
+          
           // Add completion message to chat
           addMessage({
             id: `exec-completed-${Date.now()}`,
             type: 'assistant',
-            content: `🎉 **Execução Concluída!**\n\n✅ **Status:** ${executionData.status}\n📊 **Resultado:** Todos os componentes foram processados\n🆔 **ID:** ${executionData.id}\n\n🎯 **Workflow executado com sucesso!**`,
+            content: `🎉 **Execução Concluída!**\n\n✅ **Status:** ${executionData.status}\n📊 **Resultado:** Todos os componentes foram processados\n🆔 **ID:** ${executionData.id}\n⏱️ **Tempo total:** ${pollCount * 2}s\n\n🎯 **Workflow executado com sucesso!**`,
+            timestamp: new Date().toISOString(),
+          });
+          
+          clearInterval(executionInterval);
+          
+        } else if (executionData.status === 'failed') {
+          // Mark all nodes as failed
+          nodes.forEach(node => {
+            setNodeState(node.id, 'failed');
+          });
+          
+          setNodes(prevNodes => prevNodes.map(node => ({
+            ...node,
+            data: {
+              ...node.data,
+              status: 'failed',
+            },
+          })));
+          
+          setGlobalIsExecuting(false);
+          setExecutionId(null);
+          
+          // Add failure message to chat
+          addMessage({
+            id: `exec-failed-${Date.now()}`,
+            type: 'assistant',
+            content: `❌ **Execução Falhou!**\n\n🚨 **Status:** ${executionData.status}\n📊 **Resultado:** Execução interrompida\n🆔 **ID:** ${executionData.id}\n⏱️ **Tempo:** ${pollCount * 2}s\n\n🔧 **Ação:** Verifique os logs e tente novamente.`,
+            timestamp: new Date().toISOString(),
+          });
+          
+          clearInterval(executionInterval);
+        }
+        
+        // Stop polling after max attempts
+        if (pollCount >= maxPolls) {
+          clearInterval(executionInterval);
+          addMessage({
+            id: `exec-timeout-${Date.now()}`,
+            type: 'assistant',
+            content: `⏰ **Timeout da Execução**\n\n🕐 **Status:** Tempo limite atingido\n📊 **Resultado:** Execução pode estar ainda rodando\n🆔 **ID:** ${currentExecution.id}\n\n🔧 **Ação:** Verifique o status manualmente.`,
             timestamp: new Date().toISOString(),
           });
         }
+        
       } catch (error) {
         console.error('Error fetching execution status:', error);
+        
+        // On error, mark as failed
+        nodes.forEach(node => {
+          setNodeState(node.id, 'failed');
+        });
+        
+        setNodes(prevNodes => prevNodes.map(node => ({
+          ...node,
+          data: {
+            ...node.data,
+            status: 'failed',
+          },
+        })));
+        
+        setGlobalIsExecuting(false);
+        setExecutionId(null);
+        
+        addMessage({
+          id: `exec-error-${Date.now()}`,
+          type: 'assistant',
+          content: `❌ **Erro na Verificação**\n\n🚨 **Falha:** Erro ao verificar status da execução\n📊 **Status:** Todos os componentes marcados como falharam\n\n🔧 **Ação:** Verifique a conexão e tente novamente.`,
+          timestamp: new Date().toISOString(),
+        });
+        
+        clearInterval(executionInterval);
       }
-    }, 2000); // Poll every 2 seconds during execution
+    }, 2000); // Poll every 2 seconds
 
     return () => clearInterval(executionInterval);
-  }, [currentExecution, nodes, setGlobalIsExecuting]);
+  }, [currentExecution?.id, nodes, nodeStates, setGlobalIsExecuting, setExecutionId, setNodeState]);
 
-  // Update nodes when execution starts
-  useEffect(() => {
-    if (currentExecution && currentExecution.status === 'running') {
-      // Mark all nodes as running initially
-      setNodes(prevNodes => prevNodes.map(node => ({
-        ...node,
-        data: {
-          ...node.data,
-          status: 'running',
-        },
-      })));
-      
-      // Add message to chat
-      addMessage({
-        id: `exec-visual-start-${Date.now()}`,
-        type: 'assistant',
-        content: `⚡ **Execução Visual Iniciada!**\n\n👀 **Status dos Cards:**\n• Todos os agentes e tarefas estão em execução\n• Badges azuis com ícones animados indicam atividade\n• Animações mostram progresso em tempo real\n\n🎯 **Acompanhe o progresso visualmente nos cards!**`,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }, [currentExecution?.status]);
 
   // Cleanup execution state when execution completes
   useEffect(() => {
@@ -756,7 +820,26 @@ function VisualEditorContent() {
     mutationFn: (inputs: Record<string, unknown>) => apiClient.run.project(Number(projectId), { inputs, language: 'pt-br' }),
     onSuccess: (data: Execution) => {
       setCurrentExecution(data);
+      setExecutionId(data.id);
       setGlobalIsExecuting(false);
+      
+      // Reset all node states to idle first
+      resetNodeStates();
+      
+      // Initialize all nodes as running
+      nodes.forEach(node => {
+        setNodeState(node.id, 'running');
+      });
+      
+      // Update visual nodes immediately
+      setNodes(prevNodes => prevNodes.map(node => ({
+        ...node,
+        data: {
+          ...node.data,
+          status: 'running',
+        },
+      })));
+      
       // Chat será aberto automaticamente pelo ChatDock
       addMessage({ 
         id: `exec-id-${data.id}`, 
@@ -771,6 +854,25 @@ function VisualEditorContent() {
     },
     onError: (error: Error) => {
       setGlobalIsExecuting(false);
+      setExecutionId(null);
+      resetNodeStates();
+      
+      // Mark all nodes as failed
+      setNodes(prevNodes => prevNodes.map(node => ({
+        ...node,
+        data: {
+          ...node.data,
+          status: 'failed',
+        },
+      })));
+      
+      addMessage({
+        id: `exec-error-${Date.now()}`,
+        type: 'assistant',
+        content: `❌ **Erro na Execução**\n\n🚨 **Falha:** ${error.message}\n📊 **Status:** Todos os componentes marcados como falharam\n\n🔧 **Ação:** Verifique os logs e tente novamente.`,
+        timestamp: new Date().toISOString(),
+      });
+      
       toast({
         title: "Erro",
         description: "Falha ao executar workflow",
