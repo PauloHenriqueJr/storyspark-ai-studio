@@ -1,8 +1,9 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { CheckSquare, FileText, Clock, AlertCircle } from 'lucide-react';
+import { CheckSquare, FileText, Clock, AlertCircle, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useExecutionControlStore } from '@/lib/store';
 
 export interface TaskNodeData {
   description: string;
@@ -16,8 +17,16 @@ export interface TaskNodeData {
 }
 
 const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
+  const { nodeStates } = useExecutionControlStore();
+  
+  // Use global state if available, fallback to local data
+  const nodeState = nodeStates[data.description] || nodeState || 'idle';
+  
+  // Debug: Log status changes
+  console.log('TaskNode render:', { id: data.description, localStatus: nodeState, globalStatus: nodeState });
+  
   const getStatusColor = () => {
-    switch (data.status) {
+    switch (nodeState) {
       case 'running':
         return 'bg-blue-500';
       case 'completed':
@@ -30,7 +39,7 @@ const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
   };
 
   const getStatusText = () => {
-    switch (data.status) {
+    switch (nodeState) {
       case 'running':
         return 'Running';
       case 'completed':
@@ -48,7 +57,7 @@ const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
         "bg-white dark:bg-gray-900 rounded-xl shadow-md border-2 transition-all duration-200",
         "min-w-[220px] max-w-[260px] relative",
         selected ? "border-primary shadow-lg scale-105" : "border-gray-200 dark:border-gray-700",
-        data.status === 'running' && "animate-pulse",
+        nodeState === 'running' && "animate-pulse",
         data.isCreating && "border-primary shadow-lg animate-pulse",
         data.isRunning && "border-blue-500 shadow-lg animate-pulse"
       )}
@@ -98,9 +107,9 @@ const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
             variant="secondary"
             className={cn(
               "text-[10px] px-2 py-0.5",
-              data.status === 'running' && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-              data.status === 'completed' && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-              data.status === 'failed' && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+              nodeState === 'running' && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+              nodeState === 'completed' && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+              nodeState === 'failed' && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
             )}
           >
             <div className={cn("w-1.5 h-1.5 rounded-full mr-1.5", getStatusColor())} />
