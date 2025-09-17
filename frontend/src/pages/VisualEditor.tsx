@@ -39,7 +39,10 @@ import {
   Settings,
   Layers,
   Zap,
-  User
+  User,
+  Sparkles,
+  Trash2,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
@@ -221,11 +224,20 @@ function VisualEditorContent() {
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
   const [currentExecution, setCurrentExecution] = useState<Execution | null>(null);
+
+  // State for execution control
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
   const [lastLogSize, setLastLogSize] = useState(0);
   const [runningNodes, setRunningNodes] = useState<Set<string>>(new Set());
   const [layoutDirection, setLayoutDirection] = useState<'TB' | 'LR'>('TB');
   const [creatingNodes, setCreatingNodes] = useState<Set<string>>(new Set());
+
+  // Simple execution control functions
+  const canExecute = () => !isExecuting && !isCreatingWorkflow;
+  const canCreateWorkflow = () => !isExecuting && !isCreatingWorkflow;
 
   // Get project ID from URL
   const projectId = new URLSearchParams(location.search).get('projectId');
@@ -242,6 +254,12 @@ function VisualEditorContent() {
         } catch (e) {
           console.error('Failed to load projects:', e);
         }
+      } else {
+        // Clear editor when project changes
+        setNodes([]);
+        setEdges([]);
+        setCurrentExecution(null);
+        setRunningNodes(new Set());
       }
     };
     checkAndRedirect();
@@ -303,13 +321,14 @@ function VisualEditorContent() {
         type: 'agent',
         position: { x: 0, y: 0 }, // Will be calculated by layout
         data: {
-          name: agent.name,
-          role: agent.role,
+          name: agent.name || `Agent ${agent.id}`,
+          role: agent.role || 'Assistant',
           status: 'idle',
           tools: agent.tools || [],
-          memory: agent.memory,
-          delegation: agent.allow_delegation,
+          memory: agent.memory || false,
+          delegation: agent.allow_delegation || false,
           isCreating: creatingNodeIds.has(nodeId),
+          refId: agent.id, // Store original ID for API calls
         },
       };
 
@@ -343,13 +362,14 @@ function VisualEditorContent() {
         type: 'task',
         position: { x: 0, y: 0 }, // Will be calculated by layout
         data: {
-          description: task.description,
-          expectedOutput: task.expected_output,
+          description: task.description || `Task ${task.id}`,
+          expectedOutput: task.expected_output || 'Output expected',
           status: 'pending',
-          agentName: agentNode?.name,
-          async: task.async_execution,
-          outputFile: task.output_file,
+          agentName: agentNode?.name || 'Unknown Agent',
+          async: task.async_execution || false,
+          outputFile: task.output_file || '',
           isCreating: creatingNodeIds.has(taskId),
+          refId: task.id, // Store original ID for API calls
         },
       };
 
@@ -450,6 +470,97 @@ function VisualEditorContent() {
     }
   }, [workflow, setNodes, setEdges, toast, reactFlowInstance, layoutDirection, createNodesFromData]);
 
+  // Listen for chat messages to trigger workflow execution
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.type === 'assistant' &&
+      (lastMessage.content.includes('Executando workflow') ||
+        lastMessage.content.includes('Iniciando execução')) &&
+      !currentExecution &&
+      !lastMessage.id.startsWith('exec-start-') && // Don't react to system-generated execution messages
+      !lastMessage.id.startsWith('exec-event-')) { // Don't react to event-generated messages
+
+      // Auto-execute workflow after chat message
+      setTimeout(() => {
+        handleRunWorkflow();
+      }, 1000);
+    }
+  }, [messages, currentExecution]);
+
+  // Listen for workflow creation events from chat
+  useEffect(() => {
+    const handleWorkflowCreated = (event: CustomEvent) => {
+      const { agents, tasks, projectId: eventProjectId } = event.detail;
+
+      // Only process if it's for the current project and not already creating
+      if (eventProjectId && String(eventProjectId) === String(projectId) && canCreateWorkflow()) {
+        console.log('Workflow created event received:', { agents, tasks, projectId });
+
+        setIsCreatingWorkflow(true);
+
+        // Clear existing workflow first
+        setNodes([]);
+        setEdges([]);
+        setCurrentExecution(null);
+        setRunningNodes(new Set());
+
+        // Add message to chat
+        addMessage({
+          id: `workflow-created-${Date.now()}`,
+          type: 'assistant',
+          content: `✅ Novo workflow criado com sucesso!\n\n📊 ${agents} agente${agents > 1 ? 's' : ''} e ${tasks} tarefa${tasks > 1 ? 's' : ''} criado${agents > 1 || tasks > 1 ? 's' : ''} no editor visual.\n\n🔄 Editor limpo e novo fluxo carregado.`,
+          timestamp: new Date().toISOString(),
+        });
+
+        // Force refresh of agents and tasks data
+        queryClient.invalidateQueries({ queryKey: queryKeys.agents(String(projectId)) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks(String(projectId)) });
+
+        toast({
+          title: 'Novo Workflow Criado',
+          description: `Editor limpo e ${agents} agentes + ${tasks} tarefas carregados.`,
+        });
+
+        // Reset creation state after a delay
+        setTimeout(() => {
+          setIsCreatingWorkflow(false);
+        }, 2000);
+      }
+    };
+
+    const handleExecuteWorkflow = (event: CustomEvent) => {
+      const { projectId: eventProjectId } = event.detail;
+
+      // Only process if it's for the current project and no execution is running
+      if (eventProjectId && String(eventProjectId) === String(projectId) && !currentExecution && canExecute()) {
+        console.log('Executing workflow for project:', projectId);
+
+        setIsExecuting(true);
+
+        // Add message to chat
+        addMessage({
+          id: `exec-event-${Date.now()}`,
+          type: 'assistant',
+          content: '🎯 Executando workflow no editor visual...',
+          timestamp: new Date().toISOString(),
+        });
+
+        // Auto-execute workflow
+        setTimeout(() => {
+          handleRunWorkflow();
+        }, 500);
+      }
+    };
+
+    window.addEventListener('workflowCreated', handleWorkflowCreated as EventListener);
+    window.addEventListener('executeWorkflow', handleExecuteWorkflow as EventListener);
+
+    return () => {
+      window.removeEventListener('workflowCreated', handleWorkflowCreated as EventListener);
+      window.removeEventListener('executeWorkflow', handleExecuteWorkflow as EventListener);
+    };
+  }, [projectId, queryClient, toast, canCreateWorkflow, canExecute]);
+
   // Auto-refresh when agents/tasks change
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -457,13 +568,28 @@ function VisualEditorContent() {
         await queryClient.invalidateQueries({ queryKey: queryKeys.agents(projectId) });
         await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
       }
-    }, 3000); // Poll every 3 seconds
+    }, 3000); // Poll every 3 seconds for better real-time updates
     return () => clearInterval(interval);
   }, [projectId, queryClient]);
+
+  // Cleanup execution state when execution completes
+  useEffect(() => {
+    if (currentExecution?.status === 'completed' || currentExecution?.status === 'error') {
+      const timer = setTimeout(() => {
+        setCurrentExecution(null);
+        setIsExecuting(false);
+        setRunningNodes(new Set());
+      }, 5000); // Clear after 5 seconds
+
+      return () => clearTimeout(timer);
+    }
+  }, [currentExecution]);
 
   // Update nodes when agents/tasks change
   useEffect(() => {
     if (project && (agents.length > 0 || tasks.length > 0)) {
+      console.log('Updating nodes with agents:', agents.length, 'tasks:', tasks.length);
+
       const { nodes: newNodes, edges: newEdges } = createNodesFromData(
         agents,
         tasks,
@@ -490,13 +616,28 @@ function VisualEditorContent() {
         ...edge,
         animated: currentExecution?.status === 'running',
       })));
+
+      // Force ReactFlow to re-render
+      setTimeout(() => {
+        if (reactFlowInstance) {
+          reactFlowInstance.fitView({ padding: 0.3, duration: 200 });
+        }
+      }, 50);
+
+      // Auto-fit view when nodes are added
+      if (newNodes.length > 0) {
+        setTimeout(() => {
+          reactFlowInstance?.fitView({ padding: 0.3, duration: 400 });
+        }, 100);
+      }
     }
-  }, [project, agents, tasks, runningNodes, currentExecution, layoutDirection, createNodesFromData, setEdges, setNodes]);
+  }, [project, agents, tasks, runningNodes, currentExecution, layoutDirection, reactFlowInstance]);
 
   const runMutation = useMutation({
-    mutationFn: (inputs: Record<string, unknown>) => apiClient.run.project(Number(projectId), { inputs, language: 'pt-br' }),
+    mutationFn: (inputs: Record<string, unknown>) => apiClient.run.project(Number(projectId), { inputs, language: 'pt' }),
     onSuccess: (data: Execution) => {
       setCurrentExecution(data);
+      setIsExecuting(false);
       // Chat será aberto automaticamente pelo ChatDock
       addMessage({ id: `exec-id-${data.id}`, type: 'assistant', content: `Execução iniciada (ID: ${data.id}).`, timestamp: new Date().toISOString() });
       toast({
@@ -505,6 +646,7 @@ function VisualEditorContent() {
       });
     },
     onError: (error: Error) => {
+      setIsExecuting(false);
       toast({
         title: "Erro",
         description: "Falha ao executar workflow",
@@ -541,8 +683,14 @@ function VisualEditorContent() {
   const executionQuery = useQuery({
     queryKey: queryKeys.execution(currentExecution?.id || ''),
     queryFn: () => apiClient.getExecution(currentExecution!.id),
-    enabled: !!currentExecution && !!currentExecution.id && currentExecution.status === 'running',
-    refetchInterval: 1000,
+    enabled: !!currentExecution && !!currentExecution.id,
+    refetchInterval: (data) => {
+      // Poll more frequently when running, less when completed/error
+      if (data?.status === 'running') return 1000;
+      if (data?.status === 'completed' || data?.status === 'error') return false;
+      return 2000;
+    },
+    refetchIntervalInBackground: true,
   });
 
   useEffect(() => {
@@ -556,26 +704,34 @@ function VisualEditorContent() {
 
         // Analyze logs to determine which nodes are currently running
         const logs = data.logs || '';
-        const recentLines = logs.split('\n').slice(-10); // Last 10 lines
+        const recentLines = logs.split('\n').slice(-15); // Last 15 lines for better detection
 
         // Look for agent and task mentions in recent logs
         recentLines.forEach(line => {
           const lowerLine = line.toLowerCase();
 
-          // Check for agent execution
+          // Check for agent execution with more patterns
           agents.forEach(agent => {
             if (lowerLine.includes(agent.name.toLowerCase()) ||
               lowerLine.includes(`agent-${agent.id}`) ||
-              lowerLine.includes('starting') && lowerLine.includes('agent') ||
-              lowerLine.includes('running') && lowerLine.includes('agent')) {
+              lowerLine.includes(`agent ${agent.id}`) ||
+              (lowerLine.includes('starting') && lowerLine.includes('agent')) ||
+              (lowerLine.includes('running') && lowerLine.includes('agent')) ||
+              (lowerLine.includes('executing') && lowerLine.includes('agent')) ||
+              (lowerLine.includes('processing') && lowerLine.includes('agent'))) {
               activeNodes.add(`agent-${agent.id}`);
             }
-          });          // Check for task execution
+          });
+
+          // Check for task execution with more patterns
           tasks.forEach(task => {
             if (lowerLine.includes(task.description.toLowerCase()) ||
               lowerLine.includes(`task-${task.id}`) ||
-              lowerLine.includes('executing') && lowerLine.includes('task') ||
-              lowerLine.includes('running') && lowerLine.includes('task')) {
+              lowerLine.includes(`task ${task.id}`) ||
+              (lowerLine.includes('executing') && lowerLine.includes('task')) ||
+              (lowerLine.includes('running') && lowerLine.includes('task')) ||
+              (lowerLine.includes('processing') && lowerLine.includes('task')) ||
+              (lowerLine.includes('completing') && lowerLine.includes('task'))) {
               activeNodes.add(`task-${task.id}`);
             }
           });
@@ -584,7 +740,7 @@ function VisualEditorContent() {
         // If no specific nodes found in logs, show progress through the flow
         if (activeNodes.size === 0) {
           // Try to find any node that might be running based on general execution indicators
-          const executionIndicators = ['starting', 'running', 'executing', 'processing'];
+          const executionIndicators = ['starting', 'running', 'executing', 'processing', 'working', 'analyzing'];
           const hasExecutionActivity = recentLines.some(line =>
             executionIndicators.some(indicator => line.toLowerCase().includes(indicator))
           );
@@ -610,10 +766,13 @@ function VisualEditorContent() {
               const recentLines = lines.slice(-3); // Last 3 lines
 
               recentLines.forEach((line) => {
-                // Clean up log messages
+                // Clean up log messages - remove ANSI codes and special characters
                 const cleanedLine = line
                   .replace(/\*\*/g, '')
-                  .replace(/[🎯✅📋🔧💡]/gu, '')
+                  .replace(/[🎯✅📋🔧💡🤖]/gu, '')
+                  .replace(/\x1b\[[0-9;]*[mGKHFJ]/g, '') // Remove ANSI escape codes
+                  .replace(/[│┌┐└┘├┤┬┴┼─│]/g, '') // Remove box drawing characters
+                  .replace(/\s+/g, ' ') // Normalize whitespace
                   .trim();
 
                 if (cleanedLine && cleanedLine.length > 10) { // Filter out very short messages
@@ -748,12 +907,108 @@ function VisualEditorContent() {
   );
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-    setSelectedNode(node);
-    // Only auto-open inspector on desktop (lg screens and up)
-    if (window.innerWidth >= 1024) {
-      setIsInspectorOpen(true);
+    // Handle multi-selection with Ctrl/Cmd key
+    if (event.ctrlKey || event.metaKey) {
+      setSelectedNodes(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(node.id)) {
+          newSet.delete(node.id);
+        } else {
+          newSet.add(node.id);
+        }
+        return newSet;
+      });
+    } else {
+      setSelectedNode(node);
+      setSelectedNodes(new Set([node.id]));
+      // Only auto-open inspector on desktop (lg screens and up)
+      if (window.innerWidth >= 1024) {
+        setIsInspectorOpen(true);
+      }
     }
   }, []);
+
+  // Function to delete selected nodes and their connections
+  const deleteSelectedNodes = useCallback(() => {
+    if (selectedNodes.size === 0) return;
+
+    const nodesToDelete = Array.from(selectedNodes);
+
+    // Delete nodes from API if they have refId
+    nodesToDelete.forEach(nodeId => {
+      const node = nodes.find(n => n.id === nodeId);
+      if (node && node.data.refId) {
+        const nodeType = node.type === 'agent' ? 'agent' : 'task';
+        // Delete from API
+        if (nodeType === 'agent') {
+          apiClient.deleteAgent(String(node.data.refId)).catch(console.error);
+        } else {
+          apiClient.deleteTask(String(node.data.refId)).catch(console.error);
+        }
+      }
+    });
+
+    // Remove nodes from visual editor
+    setNodes(prevNodes => prevNodes.filter(node => !selectedNodes.has(node.id)));
+
+    // Remove edges connected to deleted nodes
+    setEdges(prevEdges => prevEdges.filter(edge =>
+      !selectedNodes.has(edge.source) && !selectedNodes.has(edge.target)
+    ));
+
+    // Clear selection
+    setSelectedNodes(new Set());
+    setSelectedNode(null);
+    setIsInspectorOpen(false);
+
+    toast({
+      title: 'Nós eliminados',
+      description: `${nodesToDelete.length} nó${nodesToDelete.length > 1 ? 's' : ''} e suas conexões foram removidos.`,
+    });
+
+    // Refresh data
+    if (projectId) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.agents(String(projectId)) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks(String(projectId)) });
+    }
+  }, [selectedNodes, nodes, setNodes, setEdges, toast, projectId, queryClient]);
+
+  // Function to clear all nodes
+  const clearAllNodes = useCallback(() => {
+    if (nodes.length === 0) return;
+
+    // Delete all nodes from API
+    nodes.forEach(node => {
+      if (node.data.refId) {
+        const nodeType = node.type === 'agent' ? 'agent' : 'task';
+        if (nodeType === 'agent') {
+          apiClient.deleteAgent(String(node.data.refId)).catch(console.error);
+        } else {
+          apiClient.deleteTask(String(node.data.refId)).catch(console.error);
+        }
+      }
+    });
+
+    // Clear visual editor
+    setNodes([]);
+    setEdges([]);
+    setCurrentExecution(null);
+    setRunningNodes(new Set());
+    setSelectedNodes(new Set());
+    setSelectedNode(null);
+    setIsInspectorOpen(false);
+
+    toast({
+      title: 'Editor limpo',
+      description: 'Todos os workflows foram removidos do editor.',
+    });
+
+    // Refresh data
+    if (projectId) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.agents(String(projectId)) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks(String(projectId)) });
+    }
+  }, [nodes, setNodes, setEdges, toast, projectId, queryClient]);
 
   const handleRunWorkflow = () => {
     if (!projectId) {
@@ -765,9 +1020,27 @@ function VisualEditorContent() {
       return;
     }
 
+    if (!canExecute() || currentExecution) {
+      toast({
+        title: "Execução em andamento",
+        description: "Aguarde a execução atual terminar",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const inputs = {}; // TODO: collect inputs from UI if available
-    // Chat será aberto automaticamente pelo ChatDock
-    addMessage({ id: `exec-start-${Date.now()}`, type: 'assistant', content: 'Iniciando execução do workflow...', timestamp: new Date().toISOString() });
+
+    // Add message to chat about execution starting
+    addMessage({
+      id: `exec-start-${Date.now()}`,
+      type: 'assistant',
+      content: '🚀 Iniciando execução do workflow...\n\nAgentes e tarefas serão executados em sequência.',
+      timestamp: new Date().toISOString()
+    });
+
+    // Start execution
+    setIsExecuting(true); // Set executing state immediately
     runMutation.mutate(inputs);
   };
 
@@ -868,6 +1141,27 @@ function VisualEditorContent() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Delete selected nodes with Delete key
+      if (event.key === 'Delete' && selectedNodes.size > 0) {
+        event.preventDefault();
+        deleteSelectedNodes();
+      }
+
+      // Clear selection with Escape key
+      if (event.key === 'Escape') {
+        setSelectedNodes(new Set());
+        setSelectedNode(null);
+        setIsInspectorOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNodes, deleteSelectedNodes]);
+
   // Auto-fit view when nodes change
   useEffect(() => {
     if (nodes.length > 0 && reactFlowInstance) {
@@ -899,74 +1193,308 @@ function VisualEditorContent() {
             </div>
           </div>
         )}
+        {/* Status Panel */}
+        {(isCreatingWorkflow || isExecuting) && (
+          <Panel position="top-center" className="bg-green-100 dark:bg-green-900 rounded-lg shadow-lg border border-green-300 dark:border-green-700 m-4 p-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                {isCreatingWorkflow ? (
+                  <Sparkles className="h-4 w-4 text-white animate-pulse" />
+                ) : isExecuting ? (
+                  <Zap className="h-4 w-4 text-white animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4 text-white" />
+                )}
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-green-800 dark:text-green-200">
+                  {isCreatingWorkflow ? 'Criando Workflow...' :
+                    isExecuting ? 'Executando Workflow...' :
+                      'Executar Workflow'}
+                </div>
+                <div className="text-xs text-green-600 dark:text-green-300">
+                  {isCreatingWorkflow ? 'Aguarde enquanto o novo fluxo é criado' :
+                    isExecuting ? 'Processando agentes e tarefas' :
+                      'Clique para executar o workflow'}
+                </div>
+              </div>
+            </div>
+          </Panel>
+        )}
+
+        {/* Selection Panel - REMOVED: functionality available in main menu */}
+        {/* {selectedNodes.size > 0 && (
+          <Panel position="top-center" className="bg-blue-100 dark:bg-blue-900 rounded-lg shadow-lg border border-blue-300 dark:border-blue-700 m-4 p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                  <CheckSquare className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                    {selectedNodes.size} nó{selectedNodes.size > 1 ? 's' : ''} selecionado{selectedNodes.size > 1 ? 's' : ''}
+                  </div>
+                  <div className="text-xs text-blue-600 dark:text-blue-300">
+                    {(() => {
+                      const selectedNodesList = Array.from(selectedNodes);
+                      const agents = selectedNodesList.filter(id => nodes.find(n => n.id === id)?.type === 'agent').length;
+                      const tasks = selectedNodesList.filter(id => nodes.find(n => n.id === id)?.type === 'task').length;
+                      return `${agents} agente${agents > 1 ? 's' : ''} e ${tasks} tarefa${tasks > 1 ? 's' : ''}`;
+                    })()} • Pressione Delete ou clique em "Eliminar"
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    setSelectedNodes(new Set());
+                    setSelectedNode(null);
+                    setIsInspectorOpen(false);
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={deleteSelectedNodes}
+                  variant="destructive"
+                  size="sm"
+                  className="text-xs"
+                >
+                  <Trash2 className="h-3 w-3 mr-1" />
+                  Eliminar ({selectedNodes.size})
+                </Button>
+              </div>
+            </div>
+          </Panel>
+        )} */}
+
+
         {/* Clean Toolbar */}
         <Panel position="top-left" className="bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 m-4">
-          <Button
-            onClick={() => {
-              setNodes([]);
-              setEdges([]);
-              toast({ title: 'Fluxo limpo', description: 'Todos os cards e conexões foram removidos.' });
-            }}
-            variant="outline"
-            size="sm"
-            title="Limpar fluxo"
-            className="text-xs md:text-sm"
-          >
-            <RotateCcw className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
-            <span className="hidden md:inline">Limpar</span>
-          </Button>
-          <Button
-            onClick={handleRunWorkflow}
-            className="btn-primary gap-1 md:gap-2"
-            size="sm"
-            disabled={runMutation.isPending || !projectId}
-            title={!projectId ? "Selecione um projeto primeiro" : "Executar workflow"}
-          >
-            <Play className="h-3 w-3 md:h-4 md:w-4" />
-            <span className="text-xs md:text-sm">{runMutation.isPending ? 'Run...' : 'Run'}</span>
-          </Button>
-          {runMutation.isPending && <div className="text-xs text-muted-foreground mt-1">Carregando execução...</div>}
-          {!projectId && <div className="text-xs text-muted-foreground mt-1">Selecione um projeto para executar</div>}
-          <Button
-            onClick={handleValidate}
-            variant="outline"
-            size="sm"
-            className="text-xs md:text-sm"
-          >
-            <CheckSquare className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
-            <span className="hidden md:inline">Validar</span>
-          </Button>
-          <Separator orientation="vertical" className="h-4 md:h-6 hidden md:block" />
-          <Button
-            onClick={handleAutoLayout}
-            variant="ghost"
-            size="sm"
-            title="Auto Layout"
-          >
-            <Layers className="h-3 w-3 md:h-4 md:w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => reactFlowInstance?.fitView({ padding: 0.2, duration: 200 })}
-            title="Fit View"
-          >
-            <Maximize className="h-3 w-3 md:h-4 md:w-4" />
-          </Button>
-          <Separator orientation="vertical" className="h-4 md:h-6 hidden md:block" />
-          <Button
-            onClick={handleExportPNG}
-            variant="ghost"
-            size="sm"
-            disabled={exportMutation.isPending || !projectId}
-            title={!projectId ? "Selecione um projeto primeiro" : "Exportar"}
-          >
-            <Download className="h-3 w-3 md:h-4 md:w-4" />
-            {exportMutation.isPending && <span className="ml-1 text-xs hidden md:inline">...</span>}
-          </Button>
-          {!projectId && <div className="text-xs text-muted-foreground mt-1">Selecione um projeto para exportar</div>}
-          <Separator orientation="vertical" className="h-4 md:h-6 hidden md:block" />
+          <div className="flex flex-col gap-2">
+            {/* Main Actions */}
+            <div className="flex gap-2">
+              <Button
+                onClick={clearAllNodes}
+                variant="outline"
+                size="sm"
+                title="Limpar editor"
+                className="text-xs md:text-sm"
+                disabled={nodes.length === 0}
+              >
+                <RotateCcw className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                <span className="hidden md:inline">Limpar Editor</span>
+              </Button>
 
+
+              {/* Separator */}
+              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+
+              <Button
+                onClick={handleRunWorkflow}
+                className="btn-primary gap-1 md:gap-2"
+                size="sm"
+                disabled={runMutation.isPending || !projectId || currentExecution?.status === 'running' || isExecuting || isCreatingWorkflow}
+                title={!projectId ? "Selecione um projeto primeiro" : "Executar workflow"}
+              >
+                <Play className="h-3 w-3 md:h-4 md:w-4" />
+                <span className="text-xs md:text-sm">
+                  {runMutation.isPending || isExecuting ? 'Executando...' :
+                    isCreatingWorkflow ? 'Criando...' :
+                      currentExecution?.status === 'running' ? 'Executando...' : 'Executar'}
+                </span>
+              </Button>
+            </div>
+
+            {/* Selection Actions */}
+            {nodes.length > 0 && (
+              <>
+                <Separator className="my-1" />
+                <div className="flex gap-2">
+                  {/* Select All Button */}
+                  {selectedNodes.size < nodes.length && (
+                    <div className="flex gap-1">
+                      <Button
+                        onClick={() => {
+                          const allNodeIds = nodes.map(node => node.id);
+                          setSelectedNodes(new Set(allNodeIds));
+                          setSelectedNode(null);
+                          setIsInspectorOpen(false);
+                        }}
+                        variant="outline"
+                        size="sm"
+                        title="Selecionar todos os nós"
+                        className="text-xs md:text-sm"
+                      >
+                        <CheckSquare className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                        <span className="hidden md:inline">Todos</span>
+                      </Button>
+
+                      {/* Select Agents Only */}
+                      {nodes.some(node => node.type === 'agent') && (
+                        <Button
+                          onClick={() => {
+                            const agentNodeIds = nodes.filter(node => node.type === 'agent').map(node => node.id);
+                            setSelectedNodes(new Set(agentNodeIds));
+                            setSelectedNode(null);
+                            setIsInspectorOpen(false);
+                          }}
+                          variant="outline"
+                          size="sm"
+                          title="Selecionar apenas agentes"
+                          className="text-xs md:text-sm"
+                        >
+                          <Users className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                          <span className="hidden md:inline">Agentes</span>
+                        </Button>
+                      )}
+
+                      {/* Select Tasks Only */}
+                      {nodes.some(node => node.type === 'task') && (
+                        <Button
+                          onClick={() => {
+                            const taskNodeIds = nodes.filter(node => node.type === 'task').map(node => node.id);
+                            setSelectedNodes(new Set(taskNodeIds));
+                            setSelectedNode(null);
+                            setIsInspectorOpen(false);
+                          }}
+                          variant="outline"
+                          size="sm"
+                          title="Selecionar apenas tasks"
+                          className="text-xs md:text-sm"
+                        >
+                          <CheckSquare className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                          <span className="hidden md:inline">Tasks</span>
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Clear Selection Button */}
+                  {selectedNodes.size > 0 && (
+                    <Button
+                      onClick={() => {
+                        setSelectedNodes(new Set());
+                        setSelectedNode(null);
+                        setIsInspectorOpen(false);
+                      }}
+                      variant="outline"
+                      size="sm"
+                      title="Limpar seleção"
+                      className="text-xs md:text-sm"
+                    >
+                      <X className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                      <span className="hidden md:inline">Limpar Seleção</span>
+                    </Button>
+                  )}
+
+                  {/* Delete Selected Nodes Button */}
+                  {selectedNodes.size > 0 && (
+                    <Button
+                      onClick={deleteSelectedNodes}
+                      variant="destructive"
+                      size="sm"
+                      title={`Eliminar ${selectedNodes.size} nó${selectedNodes.size > 1 ? 's' : ''} selecionado${selectedNodes.size > 1 ? 's' : ''}`}
+                      className="text-xs md:text-sm"
+                    >
+                      <Trash2 className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                      <span className="hidden md:inline">
+                        Eliminar ({selectedNodes.size})
+                      </span>
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Execution Status */}
+            {currentExecution && (
+              <div className="flex items-center gap-2 text-xs">
+                <div className={`w-2 h-2 rounded-full ${currentExecution.status === 'running' ? 'bg-green-500 animate-pulse' :
+                  currentExecution.status === 'completed' ? 'bg-green-600' :
+                    currentExecution.status === 'error' ? 'bg-red-500' : 'bg-gray-400'
+                  }`} />
+                <span className="text-muted-foreground">
+                  {currentExecution.status === 'running' ? 'Executando...' :
+                    currentExecution.status === 'completed' ? 'Concluído' :
+                      currentExecution.status === 'error' ? 'Erro' : 'Status desconhecido'}
+                </span>
+                {currentExecution.status === 'running' && runningNodes.size > 0 && (
+                  <span className="text-muted-foreground">
+                    ({runningNodes.size} ativo{runningNodes.size > 1 ? 's' : ''})
+                  </span>
+                )}
+              </div>
+            )}
+
+            {runMutation.isPending && <div className="text-xs text-muted-foreground">Carregando execução...</div>}
+            {!projectId && <div className="text-xs text-muted-foreground">Selecione um projeto para executar</div>}
+
+            <div className="flex gap-2">
+              <Button
+                onClick={handleValidate}
+                variant="outline"
+                size="sm"
+                className="text-xs md:text-sm"
+              >
+                <CheckSquare className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
+                <span className="hidden md:inline">Validar</span>
+              </Button>
+              <Separator orientation="vertical" className="h-4 md:h-6 hidden md:block" />
+              <Button
+                onClick={handleAutoLayout}
+                variant="ghost"
+                size="sm"
+                title="Auto Layout"
+              >
+                <Layers className="h-3 w-3 md:h-4 md:w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => reactFlowInstance?.fitView({ padding: 0.2, duration: 200 })}
+                title="Fit View"
+              >
+                <Maximize className="h-3 w-3 md:h-4 md:w-4" />
+              </Button>
+              <Separator orientation="vertical" className="h-4 md:h-6 hidden md:block" />
+              <Button
+                onClick={handleExportPNG}
+                variant="ghost"
+                size="sm"
+                disabled={exportMutation.isPending || !projectId}
+                title={!projectId ? "Selecione um projeto primeiro" : "Exportar"}
+              >
+                <Download className="h-3 w-3 md:h-4 md:w-4" />
+                {exportMutation.isPending && <span className="ml-1 text-xs hidden md:inline">...</span>}
+              </Button>
+
+              {/* Test Button for Development */}
+              {process.env.NODE_ENV === 'development' && (
+                <Button
+                  onClick={() => {
+                    // Simulate workflow creation
+                    window.dispatchEvent(new CustomEvent('workflowCreated', {
+                      detail: {
+                        agents: 2,
+                        tasks: 3,
+                        projectId: projectId
+                      }
+                    }));
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                >
+                  Test Workflow
+                </Button>
+              )}
+            </div>
+          </div>
         </Panel>
 
         {/* Layout Control Panel */}
@@ -999,6 +1527,45 @@ function VisualEditorContent() {
 
         {/* React Flow Canvas - Clean Style */}
         <div className="flex-1 relative pb-20">
+          {/* Empty State */}
+          {nodes.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center z-10">
+              <div className="text-center p-8 bg-white/90 dark:bg-gray-900/90 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Layers className="h-8 w-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                  Editor Visual Vazio
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  Use o chat AI Builder para criar workflows ou clique em "Limpar Editor" para começar.
+                </p>
+                <div className="flex gap-2 justify-center">
+                  <Button
+                    onClick={() => {
+                      const chatButton = document.querySelector('[data-chat-button]') as HTMLButtonElement;
+                      if (chatButton) chatButton.click();
+                    }}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Abrir AI Builder
+                  </Button>
+                  <Button
+                    onClick={clearAllNodes}
+                    variant="ghost"
+                    size="sm"
+                    disabled={nodes.length === 0}
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Limpar Editor
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <ReactFlow
             nodes={nodes}
             edges={edges}

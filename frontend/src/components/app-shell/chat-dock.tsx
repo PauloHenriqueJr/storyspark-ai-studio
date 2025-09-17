@@ -40,6 +40,12 @@ export function ChatDock() {
   const location = useLocation();
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
+
+  // Simple execution control functions
+  const canExecute = () => !isExecuting && !isCreatingWorkflow;
+  const canCreateWorkflow = () => !isExecuting && !isCreatingWorkflow;
 
   // Only show chat in editor page
   const isInEditor = location.pathname === '/app/editor';
@@ -196,9 +202,10 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
           // Auto-execute workflow after 5 seconds if user said "executar" or similar
           const shouldAutoExecute = messageText.toLowerCase().includes('executar') ||
             messageText.toLowerCase().includes('run') ||
-            messageText.toLowerCase().includes('execute');
+            messageText.toLowerCase().includes('execute') ||
+            messageText.toLowerCase().includes('rodar');
 
-          if (shouldAutoExecute) {
+          if (shouldAutoExecute && canExecute()) {
             setTimeout(() => {
               addMessage({
                 id: `msg-${Date.now()}-auto-exec`,
@@ -207,18 +214,14 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
                 timestamp: new Date().toISOString(),
               });
 
-              // Trigger workflow execution
+              // Trigger workflow execution via custom event (only once)
               setTimeout(() => {
-                // This will trigger the execution in the VisualEditor
-                if (window.location.pathname === '/app/editor') {
-                  // Simulate clicking the run button
-                  const runButton = document.querySelector('[title="Executar workflow"]') as HTMLButtonElement;
-                  if (runButton) {
-                    runButton.click();
-                  }
-                }
-              }, 1000);
-            }, 2000);
+                console.log('Dispatching executeWorkflow event for project:', projectIdNum);
+                window.dispatchEvent(new CustomEvent('executeWorkflow', {
+                  detail: { projectId: projectIdNum }
+                }));
+              }, 3000); // Increased delay to ensure workflow is fully created
+            }, 3000); // Increased delay to ensure all creation messages are shown
           }
         }, 3000);
 
@@ -226,12 +229,23 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
         await queryClient.invalidateQueries({ queryKey: queryKeys.agents(String(projectIdNum)) });
         await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(String(projectIdNum)) });
 
-        // Force page reload if we're already in the editor to ensure nodes appear
-        if (window.location.pathname === '/app/editor') {
-          setTimeout(() => {
-            window.location.reload();
-          }, 1500);
-        }
+        // Update workflow in store to trigger visual editor update
+        setTimeout(() => {
+          console.log('Dispatching workflowCreated event:', {
+            agents: res?.created_agents || 0,
+            tasks: res?.created_tasks || 0,
+            projectId: projectIdNum
+          });
+
+          // Trigger a custom event to notify the visual editor
+          window.dispatchEvent(new CustomEvent('workflowCreated', {
+            detail: {
+              agents: res?.created_agents || 0,
+              tasks: res?.created_tasks || 0,
+              projectId: projectIdNum
+            }
+          }));
+        }, 1000);
       } else {
         // Fallback: ask user to create/select a project
         const assistantMessage: ChatMessage = {
@@ -259,7 +273,7 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
     }
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
+  const handleSuggestionClick = async (suggestion: string) => {
     if (suggestion === 'Executar workflow agora') {
       // Trigger workflow execution
       addMessage({
@@ -276,22 +290,23 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
         timestamp: new Date().toISOString(),
       });
 
-      // Trigger execution after a short delay
-      setTimeout(() => {
-        if (window.location.pathname === '/app/editor') {
-          const runButton = document.querySelector('[title="Executar workflow"]') as HTMLButtonElement;
-          if (runButton && !runButton.disabled) {
-            runButton.click();
-          } else {
-            addMessage({
-              id: `msg-${Date.now()}-exec-error`,
-              type: 'assistant',
-              content: `❌ Não foi possível executar o workflow automaticamente. Verifique se há um projeto selecionado e tente clicar no botão "Run" no editor visual.`,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        }
-      }, 1000);
+      // Trigger execution via custom event
+      const projectId = await getActiveProjectId();
+      if (projectId && canExecute()) {
+        console.log('Executing workflow for project:', projectId);
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('executeWorkflow', {
+            detail: { projectId }
+          }));
+        }, 1500); // Increased delay to prevent multiple executions
+      } else {
+        addMessage({
+          id: `msg-${Date.now()}-exec-error`,
+          type: 'assistant',
+          content: `❌ Não foi possível executar o workflow automaticamente. Verifique se há um projeto selecionado.`,
+          timestamp: new Date().toISOString(),
+        });
+      }
     } else {
       setInputValue(suggestion);
     }
@@ -325,6 +340,7 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
     return (
       <div className="fixed left-4 bottom-20 md:left-6 md:bottom-24 z-50">
         <Button
+          data-chat-button
           onClick={async () => {
             if (!isInEditor) {
               const pid = await getActiveProjectId();
