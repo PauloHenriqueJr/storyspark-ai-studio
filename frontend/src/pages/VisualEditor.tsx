@@ -592,6 +592,20 @@ function VisualEditorContent() {
           const runningNodeIds = allNodeIds.slice(0, runningCount);
           setRunningNodes(new Set(runningNodeIds));
           
+          // Force update nodes with running status
+          setNodes(prevNodes => prevNodes.map(node => {
+            if (runningNodeIds.includes(node.id)) {
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  status: 'running',
+                },
+              };
+            }
+            return node;
+          }));
+          
           // Add progress message to chat
           if (runningCount > 0 && runningCount !== runningNodes.size) {
             addMessage({
@@ -604,6 +618,15 @@ function VisualEditorContent() {
         } else if (executionData.status === 'completed') {
           setRunningNodes(new Set());
           setGlobalIsExecuting(false);
+          
+          // Update all nodes to completed status
+          setNodes(prevNodes => prevNodes.map(node => ({
+            ...node,
+            data: {
+              ...node.data,
+              status: 'completed',
+            },
+          })));
           
           // Add completion message to chat
           addMessage({
@@ -620,6 +643,28 @@ function VisualEditorContent() {
 
     return () => clearInterval(executionInterval);
   }, [currentExecution, nodes, setGlobalIsExecuting]);
+
+  // Update nodes when execution starts
+  useEffect(() => {
+    if (currentExecution && currentExecution.status === 'running') {
+      // Mark all nodes as running initially
+      setNodes(prevNodes => prevNodes.map(node => ({
+        ...node,
+        data: {
+          ...node.data,
+          status: 'running',
+        },
+      })));
+      
+      // Add message to chat
+      addMessage({
+        id: `exec-visual-start-${Date.now()}`,
+        type: 'assistant',
+        content: `⚡ **Execução Visual Iniciada!**\n\n👀 **Status dos Cards:**\n• Todos os agentes e tarefas estão em execução\n• Badges azuis com ícones animados indicam atividade\n• Animações mostram progresso em tempo real\n\n🎯 **Acompanhe o progresso visualmente nos cards!**`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }, [currentExecution?.status]);
 
   // Cleanup execution state when execution completes
   useEffect(() => {
@@ -671,8 +716,31 @@ function VisualEditorContent() {
                 status: 'running',
               },
             };
+          } else if (currentExecution?.status === 'completed') {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                status: 'completed',
+              },
+            };
+          } else if (currentExecution?.status === 'failed') {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                status: 'failed',
+              },
+            };
+          } else {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                status: 'idle',
+              },
+            };
           }
-          return node;
         }));
         
         // Update edge animations

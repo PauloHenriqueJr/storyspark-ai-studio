@@ -16,6 +16,8 @@ export interface TaskNodeData {
 }
 
 const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
+  // Debug: Log status changes
+  console.log('TaskNode render:', { id: data.description, status: data.status });
   const getStatusColor = () => {
     switch (data.status) {
       case 'running':
@@ -61,6 +63,9 @@ const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
         "bg-white dark:bg-gray-900 rounded-xl shadow-md border-2 transition-all duration-200",
         "min-w-[220px] max-w-[260px] relative",
         selected ? "border-primary shadow-lg scale-105" : "border-gray-200 dark:border-gray-700",
+        data.status === 'running' && "border-blue-500 shadow-blue-200 dark:shadow-blue-900/20",
+        data.status === 'completed' && "border-green-500 shadow-green-200 dark:shadow-green-900/20",
+        data.status === 'failed' && "border-red-500 shadow-red-200 dark:shadow-red-900/20",
         data.status === 'running' && "animate-pulse",
         data.isCreating && "border-primary shadow-lg animate-pulse",
         data.isRunning && "border-blue-500 shadow-lg animate-pulse"
@@ -103,6 +108,15 @@ const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
           </div>
         </div>
       </div>
+
+      {/* Running Overlay */}
+      {data.status === 'running' && (
+        <div className="absolute inset-0 bg-blue-500/10 rounded-xl pointer-events-none">
+          <div className="absolute top-2 right-2">
+            <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+          </div>
+        </div>
+      )}
 
       {/* Status Badge */}
       <div className="px-3 pb-2">
