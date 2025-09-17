@@ -46,7 +46,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
-import { useChatDockStore, useExecutionControlStore } from '@/lib/store';
+import { useChatDockStore } from '@/lib/store';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Agent } from '@/types/agent';
 import type { Task } from '@/types/task';
@@ -217,14 +217,6 @@ function VisualEditorContent() {
   const location = useLocation();
   const { toast } = useToast();
   const { initializeWithPrompt, addMessage, setOpen: setChatOpen, workflow, messages, isOpen: isChatOpen } = useChatDockStore();
-  const { 
-    isExecuting: globalIsExecuting, 
-    isCreatingWorkflow: globalIsCreatingWorkflow,
-    setIsExecuting: setGlobalIsExecuting,
-    setIsCreatingWorkflow: setGlobalIsCreatingWorkflow,
-    canExecute,
-    canCreateWorkflow
-  } = useExecutionControlStore();
   const queryClient = useQueryClient();
   const reactFlowInstance = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<ReactFlowNode>([]);
@@ -234,7 +226,7 @@ function VisualEditorContent() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
   const [currentExecution, setCurrentExecution] = useState<Execution | null>(null);
-  
+
   // State for execution control
   const [isExecuting, setIsExecuting] = useState(false);
   const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
@@ -242,6 +234,10 @@ function VisualEditorContent() {
   const [runningNodes, setRunningNodes] = useState<Set<string>>(new Set());
   const [layoutDirection, setLayoutDirection] = useState<'TB' | 'LR'>('TB');
   const [creatingNodes, setCreatingNodes] = useState<Set<string>>(new Set());
+
+  // Simple execution control functions
+  const canExecute = () => !isExecuting && !isCreatingWorkflow;
+  const canCreateWorkflow = () => !isExecuting && !isCreatingWorkflow;
 
   // Get project ID from URL
   const projectId = new URLSearchParams(location.search).get('projectId');
@@ -477,11 +473,13 @@ function VisualEditorContent() {
   // Listen for chat messages to trigger workflow execution
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
-    if (lastMessage && lastMessage.type === 'assistant' && 
-        (lastMessage.content.includes('Executando workflow') || 
-         lastMessage.content.includes('Iniciando execução')) &&
-        !currentExecution) { // Only execute if no execution is running
-      
+    if (lastMessage && lastMessage.type === 'assistant' &&
+      (lastMessage.content.includes('Executando workflow') ||
+        lastMessage.content.includes('Iniciando execução')) &&
+      !currentExecution &&
+      !lastMessage.id.startsWith('exec-start-') && // Don't react to system-generated execution messages
+      !lastMessage.id.startsWith('exec-event-')) { // Don't react to event-generated messages
+
       // Auto-execute workflow after chat message
       setTimeout(() => {
         handleRunWorkflow();
@@ -493,19 +491,19 @@ function VisualEditorContent() {
   useEffect(() => {
     const handleWorkflowCreated = (event: CustomEvent) => {
       const { agents, tasks, projectId: eventProjectId } = event.detail;
-      
+
       // Only process if it's for the current project and not already creating
       if (eventProjectId && String(eventProjectId) === String(projectId) && canCreateWorkflow()) {
         console.log('Workflow created event received:', { agents, tasks, projectId });
-        
-        setGlobalIsCreatingWorkflow(true);
-        
+
+        setIsCreatingWorkflow(true);
+
         // Clear existing workflow first
         setNodes([]);
         setEdges([]);
         setCurrentExecution(null);
         setRunningNodes(new Set());
-        
+
         // Add message to chat
         addMessage({
           id: `workflow-created-${Date.now()}`,
@@ -513,32 +511,32 @@ function VisualEditorContent() {
           content: `✅ Novo workflow criado com sucesso!\n\n📊 ${agents} agente${agents > 1 ? 's' : ''} e ${tasks} tarefa${tasks > 1 ? 's' : ''} criado${agents > 1 || tasks > 1 ? 's' : ''} no editor visual.\n\n🔄 Editor limpo e novo fluxo carregado.`,
           timestamp: new Date().toISOString(),
         });
-        
+
         // Force refresh of agents and tasks data
         queryClient.invalidateQueries({ queryKey: queryKeys.agents(String(projectId)) });
         queryClient.invalidateQueries({ queryKey: queryKeys.tasks(String(projectId)) });
-        
+
         toast({
           title: 'Novo Workflow Criado',
           description: `Editor limpo e ${agents} agentes + ${tasks} tarefas carregados.`,
         });
-        
+
         // Reset creation state after a delay
         setTimeout(() => {
-          setGlobalIsCreatingWorkflow(false);
+          setIsCreatingWorkflow(false);
         }, 2000);
       }
     };
 
     const handleExecuteWorkflow = (event: CustomEvent) => {
       const { projectId: eventProjectId } = event.detail;
-      
+
       // Only process if it's for the current project and no execution is running
       if (eventProjectId && String(eventProjectId) === String(projectId) && !currentExecution && canExecute()) {
         console.log('Executing workflow for project:', projectId);
-        
-        setGlobalIsExecuting(true);
-        
+
+        setIsExecuting(true);
+
         // Add message to chat
         addMessage({
           id: `exec-event-${Date.now()}`,
@@ -546,7 +544,7 @@ function VisualEditorContent() {
           content: '🎯 Executando workflow no editor visual...',
           timestamp: new Date().toISOString(),
         });
-        
+
         // Auto-execute workflow
         setTimeout(() => {
           handleRunWorkflow();
@@ -556,7 +554,7 @@ function VisualEditorContent() {
 
     window.addEventListener('workflowCreated', handleWorkflowCreated as EventListener);
     window.addEventListener('executeWorkflow', handleExecuteWorkflow as EventListener);
-    
+
     return () => {
       window.removeEventListener('workflowCreated', handleWorkflowCreated as EventListener);
       window.removeEventListener('executeWorkflow', handleExecuteWorkflow as EventListener);
@@ -576,13 +574,13 @@ function VisualEditorContent() {
 
   // Cleanup execution state when execution completes
   useEffect(() => {
-    if (currentExecution?.status === 'completed' || currentExecution?.status === 'failed') {
+    if (currentExecution?.status === 'completed' || currentExecution?.status === 'error') {
       const timer = setTimeout(() => {
         setCurrentExecution(null);
         setIsExecuting(false);
         setRunningNodes(new Set());
       }, 5000); // Clear after 5 seconds
-      
+
       return () => clearTimeout(timer);
     }
   }, [currentExecution]);
@@ -591,7 +589,7 @@ function VisualEditorContent() {
   useEffect(() => {
     if (project && (agents.length > 0 || tasks.length > 0)) {
       console.log('Updating nodes with agents:', agents.length, 'tasks:', tasks.length);
-      
+
       const { nodes: newNodes, edges: newEdges } = createNodesFromData(
         agents,
         tasks,
@@ -618,7 +616,14 @@ function VisualEditorContent() {
         ...edge,
         animated: currentExecution?.status === 'running',
       })));
-      
+
+      // Force ReactFlow to re-render
+      setTimeout(() => {
+        if (reactFlowInstance) {
+          reactFlowInstance.fitView({ padding: 0.3, duration: 200 });
+        }
+      }, 50);
+
       // Auto-fit view when nodes are added
       if (newNodes.length > 0) {
         setTimeout(() => {
@@ -626,13 +631,13 @@ function VisualEditorContent() {
         }, 100);
       }
     }
-  }, [project, agents, tasks, runningNodes, currentExecution, layoutDirection, createNodesFromData, setEdges, setNodes, reactFlowInstance]);
+  }, [project, agents, tasks, runningNodes, currentExecution, layoutDirection, reactFlowInstance]);
 
   const runMutation = useMutation({
-    mutationFn: (inputs: Record<string, unknown>) => apiClient.run.project(Number(projectId), { inputs, language: 'pt-br' }),
+    mutationFn: (inputs: Record<string, unknown>) => apiClient.run.project(Number(projectId), { inputs, language: 'pt' }),
     onSuccess: (data: Execution) => {
       setCurrentExecution(data);
-      setGlobalIsExecuting(false);
+      setIsExecuting(false);
       // Chat será aberto automaticamente pelo ChatDock
       addMessage({ id: `exec-id-${data.id}`, type: 'assistant', content: `Execução iniciada (ID: ${data.id}).`, timestamp: new Date().toISOString() });
       toast({
@@ -641,7 +646,7 @@ function VisualEditorContent() {
       });
     },
     onError: (error: Error) => {
-      setGlobalIsExecuting(false);
+      setIsExecuting(false);
       toast({
         title: "Erro",
         description: "Falha ao executar workflow",
@@ -693,63 +698,63 @@ function VisualEditorContent() {
       const data: Execution = executionQuery.data as Execution;
       setCurrentExecution(data);
 
-        // Track running nodes based on execution progress
-        if (data.status === 'running') {
-          const activeNodes = new Set<string>();
+      // Track running nodes based on execution progress
+      if (data.status === 'running') {
+        const activeNodes = new Set<string>();
 
-          // Analyze logs to determine which nodes are currently running
-          const logs = data.logs || '';
-          const recentLines = logs.split('\n').slice(-15); // Last 15 lines for better detection
+        // Analyze logs to determine which nodes are currently running
+        const logs = data.logs || '';
+        const recentLines = logs.split('\n').slice(-15); // Last 15 lines for better detection
 
-          // Look for agent and task mentions in recent logs
-          recentLines.forEach(line => {
-            const lowerLine = line.toLowerCase();
+        // Look for agent and task mentions in recent logs
+        recentLines.forEach(line => {
+          const lowerLine = line.toLowerCase();
 
-            // Check for agent execution with more patterns
-            agents.forEach(agent => {
-              if (lowerLine.includes(agent.name.toLowerCase()) ||
-                lowerLine.includes(`agent-${agent.id}`) ||
-                lowerLine.includes(`agent ${agent.id}`) ||
-                (lowerLine.includes('starting') && lowerLine.includes('agent')) ||
-                (lowerLine.includes('running') && lowerLine.includes('agent')) ||
-                (lowerLine.includes('executing') && lowerLine.includes('agent')) ||
-                (lowerLine.includes('processing') && lowerLine.includes('agent'))) {
-                activeNodes.add(`agent-${agent.id}`);
-              }
-            });
-
-            // Check for task execution with more patterns
-            tasks.forEach(task => {
-              if (lowerLine.includes(task.description.toLowerCase()) ||
-                lowerLine.includes(`task-${task.id}`) ||
-                lowerLine.includes(`task ${task.id}`) ||
-                (lowerLine.includes('executing') && lowerLine.includes('task')) ||
-                (lowerLine.includes('running') && lowerLine.includes('task')) ||
-                (lowerLine.includes('processing') && lowerLine.includes('task')) ||
-                (lowerLine.includes('completing') && lowerLine.includes('task'))) {
-                activeNodes.add(`task-${task.id}`);
-              }
-            });
+          // Check for agent execution with more patterns
+          agents.forEach(agent => {
+            if (lowerLine.includes(agent.name.toLowerCase()) ||
+              lowerLine.includes(`agent-${agent.id}`) ||
+              lowerLine.includes(`agent ${agent.id}`) ||
+              (lowerLine.includes('starting') && lowerLine.includes('agent')) ||
+              (lowerLine.includes('running') && lowerLine.includes('agent')) ||
+              (lowerLine.includes('executing') && lowerLine.includes('agent')) ||
+              (lowerLine.includes('processing') && lowerLine.includes('agent'))) {
+              activeNodes.add(`agent-${agent.id}`);
+            }
           });
 
-          // If no specific nodes found in logs, show progress through the flow
-          if (activeNodes.size === 0) {
-            // Try to find any node that might be running based on general execution indicators
-            const executionIndicators = ['starting', 'running', 'executing', 'processing', 'working', 'analyzing'];
-            const hasExecutionActivity = recentLines.some(line =>
-              executionIndicators.some(indicator => line.toLowerCase().includes(indicator))
-            );
+          // Check for task execution with more patterns
+          tasks.forEach(task => {
+            if (lowerLine.includes(task.description.toLowerCase()) ||
+              lowerLine.includes(`task-${task.id}`) ||
+              lowerLine.includes(`task ${task.id}`) ||
+              (lowerLine.includes('executing') && lowerLine.includes('task')) ||
+              (lowerLine.includes('running') && lowerLine.includes('task')) ||
+              (lowerLine.includes('processing') && lowerLine.includes('task')) ||
+              (lowerLine.includes('completing') && lowerLine.includes('task'))) {
+              activeNodes.add(`task-${task.id}`);
+            }
+          });
+        });
 
-            if (hasExecutionActivity) {
-              // If there's execution activity but no specific nodes, highlight the first agent
-              const firstAgent = agents[0];
-              if (firstAgent) {
-                activeNodes.add(`agent-${firstAgent.id}`);
-              }
+        // If no specific nodes found in logs, show progress through the flow
+        if (activeNodes.size === 0) {
+          // Try to find any node that might be running based on general execution indicators
+          const executionIndicators = ['starting', 'running', 'executing', 'processing', 'working', 'analyzing'];
+          const hasExecutionActivity = recentLines.some(line =>
+            executionIndicators.some(indicator => line.toLowerCase().includes(indicator))
+          );
+
+          if (hasExecutionActivity) {
+            // If there's execution activity but no specific nodes, highlight the first agent
+            const firstAgent = agents[0];
+            if (firstAgent) {
+              activeNodes.add(`agent-${firstAgent.id}`);
             }
           }
+        }
 
-          setRunningNodes(activeNodes);      // Append new logs to chat
+        setRunningNodes(activeNodes);      // Append new logs to chat
         try {
           const logs = data.logs || '';
           if (logs && logs.length > lastLogSize) {
@@ -761,10 +766,13 @@ function VisualEditorContent() {
               const recentLines = lines.slice(-3); // Last 3 lines
 
               recentLines.forEach((line) => {
-                // Clean up log messages
+                // Clean up log messages - remove ANSI codes and special characters
                 const cleanedLine = line
                   .replace(/\*\*/g, '')
-                  .replace(/[🎯✅📋🔧💡]/gu, '')
+                  .replace(/[🎯✅📋🔧💡🤖]/gu, '')
+                  .replace(/\x1b\[[0-9;]*[mGKHFJ]/g, '') // Remove ANSI escape codes
+                  .replace(/[│┌┐└┘├┤┬┴┼─│]/g, '') // Remove box drawing characters
+                  .replace(/\s+/g, ' ') // Normalize whitespace
                   .trim();
 
                 if (cleanedLine && cleanedLine.length > 10) { // Filter out very short messages
@@ -925,7 +933,7 @@ function VisualEditorContent() {
     if (selectedNodes.size === 0) return;
 
     const nodesToDelete = Array.from(selectedNodes);
-    
+
     // Delete nodes from API if they have refId
     nodesToDelete.forEach(nodeId => {
       const node = nodes.find(n => n.id === nodeId);
@@ -942,9 +950,9 @@ function VisualEditorContent() {
 
     // Remove nodes from visual editor
     setNodes(prevNodes => prevNodes.filter(node => !selectedNodes.has(node.id)));
-    
+
     // Remove edges connected to deleted nodes
-    setEdges(prevEdges => prevEdges.filter(edge => 
+    setEdges(prevEdges => prevEdges.filter(edge =>
       !selectedNodes.has(edge.source) && !selectedNodes.has(edge.target)
     ));
 
@@ -1022,16 +1030,17 @@ function VisualEditorContent() {
     }
 
     const inputs = {}; // TODO: collect inputs from UI if available
-    
+
     // Add message to chat about execution starting
-    addMessage({ 
-      id: `exec-start-${Date.now()}`, 
-      type: 'assistant', 
-      content: '🚀 Iniciando execução do workflow...\n\nAgentes e tarefas serão executados em sequência.', 
-      timestamp: new Date().toISOString() 
+    addMessage({
+      id: `exec-start-${Date.now()}`,
+      type: 'assistant',
+      content: '🚀 Iniciando execução do workflow...\n\nAgentes e tarefas serão executados em sequência.',
+      timestamp: new Date().toISOString()
     });
-    
+
     // Start execution
+    setIsExecuting(true); // Set executing state immediately
     runMutation.mutate(inputs);
   };
 
@@ -1140,7 +1149,7 @@ function VisualEditorContent() {
         event.preventDefault();
         deleteSelectedNodes();
       }
-      
+
       // Clear selection with Escape key
       if (event.key === 'Escape') {
         setSelectedNodes(new Set());
@@ -1185,13 +1194,13 @@ function VisualEditorContent() {
           </div>
         )}
         {/* Status Panel */}
-        {(globalIsCreatingWorkflow || globalIsExecuting || currentExecution) && (
+        {(isCreatingWorkflow || isExecuting) && (
           <Panel position="top-center" className="bg-green-100 dark:bg-green-900 rounded-lg shadow-lg border border-green-300 dark:border-green-700 m-4 p-3">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                {globalIsCreatingWorkflow ? (
+                {isCreatingWorkflow ? (
                   <Sparkles className="h-4 w-4 text-white animate-pulse" />
-                ) : globalIsExecuting ? (
+                ) : isExecuting ? (
                   <Zap className="h-4 w-4 text-white animate-spin" />
                 ) : (
                   <Play className="h-4 w-4 text-white" />
@@ -1199,22 +1208,22 @@ function VisualEditorContent() {
               </div>
               <div>
                 <div className="text-sm font-semibold text-green-800 dark:text-green-200">
-                  {globalIsCreatingWorkflow ? 'Criando Workflow...' : 
-                   globalIsExecuting ? 'Executando Workflow...' : 
-                   'Workflow em Execução'}
+                  {isCreatingWorkflow ? 'Criando Workflow...' :
+                    isExecuting ? 'Executando Workflow...' :
+                      'Executar Workflow'}
                 </div>
                 <div className="text-xs text-green-600 dark:text-green-300">
-                  {globalIsCreatingWorkflow ? 'Aguarde enquanto o novo fluxo é criado' :
-                   globalIsExecuting ? 'Processando agentes e tarefas' :
-                   `ID: ${currentExecution?.id} - Status: ${currentExecution?.status}`}
+                  {isCreatingWorkflow ? 'Aguarde enquanto o novo fluxo é criado' :
+                    isExecuting ? 'Processando agentes e tarefas' :
+                      'Clique para executar o workflow'}
                 </div>
               </div>
             </div>
           </Panel>
         )}
 
-        {/* Selection Panel */}
-        {selectedNodes.size > 0 && (
+        {/* Selection Panel - REMOVED: functionality available in main menu */}
+        {/* {selectedNodes.size > 0 && (
           <Panel position="top-center" className="bg-blue-100 dark:bg-blue-900 rounded-lg shadow-lg border border-blue-300 dark:border-blue-700 m-4 p-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1261,7 +1270,7 @@ function VisualEditorContent() {
               </div>
             </div>
           </Panel>
-        )}
+        )} */}
 
 
         {/* Clean Toolbar */}
@@ -1280,27 +1289,27 @@ function VisualEditorContent() {
                 <RotateCcw className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
                 <span className="hidden md:inline">Limpar Editor</span>
               </Button>
-              
-              
+
+
               {/* Separator */}
               <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-              
+
               <Button
                 onClick={handleRunWorkflow}
                 className="btn-primary gap-1 md:gap-2"
                 size="sm"
-                disabled={runMutation.isPending || !projectId || currentExecution?.status === 'running' || globalIsExecuting || globalIsCreatingWorkflow}
+                disabled={runMutation.isPending || !projectId || currentExecution?.status === 'running' || isExecuting || isCreatingWorkflow}
                 title={!projectId ? "Selecione um projeto primeiro" : "Executar workflow"}
               >
                 <Play className="h-3 w-3 md:h-4 md:w-4" />
                 <span className="text-xs md:text-sm">
-                  {runMutation.isPending || globalIsExecuting ? 'Executando...' : 
-                   globalIsCreatingWorkflow ? 'Criando...' :
-                   currentExecution?.status === 'running' ? 'Executando...' : 'Executar'}
+                  {runMutation.isPending || isExecuting ? 'Executando...' :
+                    isCreatingWorkflow ? 'Criando...' :
+                      currentExecution?.status === 'running' ? 'Executando...' : 'Executar'}
                 </span>
               </Button>
             </div>
-            
+
             {/* Selection Actions */}
             {nodes.length > 0 && (
               <>
@@ -1324,7 +1333,7 @@ function VisualEditorContent() {
                         <CheckSquare className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
                         <span className="hidden md:inline">Todos</span>
                       </Button>
-                      
+
                       {/* Select Agents Only */}
                       {nodes.some(node => node.type === 'agent') && (
                         <Button
@@ -1343,7 +1352,7 @@ function VisualEditorContent() {
                           <span className="hidden md:inline">Agentes</span>
                         </Button>
                       )}
-                      
+
                       {/* Select Tasks Only */}
                       {nodes.some(node => node.type === 'task') && (
                         <Button
@@ -1401,19 +1410,18 @@ function VisualEditorContent() {
                 </div>
               </>
             )}
-            
+
             {/* Execution Status */}
             {currentExecution && (
               <div className="flex items-center gap-2 text-xs">
-                <div className={`w-2 h-2 rounded-full ${
-                  currentExecution.status === 'running' ? 'bg-green-500 animate-pulse' :
+                <div className={`w-2 h-2 rounded-full ${currentExecution.status === 'running' ? 'bg-green-500 animate-pulse' :
                   currentExecution.status === 'completed' ? 'bg-green-600' :
-                  currentExecution.status === 'error' ? 'bg-red-500' : 'bg-gray-400'
-                }`} />
+                    currentExecution.status === 'error' ? 'bg-red-500' : 'bg-gray-400'
+                  }`} />
                 <span className="text-muted-foreground">
                   {currentExecution.status === 'running' ? 'Executando...' :
-                   currentExecution.status === 'completed' ? 'Concluído' :
-                   currentExecution.status === 'error' ? 'Erro' : 'Status desconhecido'}
+                    currentExecution.status === 'completed' ? 'Concluído' :
+                      currentExecution.status === 'error' ? 'Erro' : 'Status desconhecido'}
                 </span>
                 {currentExecution.status === 'running' && runningNodes.size > 0 && (
                   <span className="text-muted-foreground">
@@ -1422,10 +1430,10 @@ function VisualEditorContent() {
                 )}
               </div>
             )}
-            
+
             {runMutation.isPending && <div className="text-xs text-muted-foreground">Carregando execução...</div>}
             {!projectId && <div className="text-xs text-muted-foreground">Selecione um projeto para executar</div>}
-            
+
             <div className="flex gap-2">
               <Button
                 onClick={handleValidate}
@@ -1464,18 +1472,18 @@ function VisualEditorContent() {
                 <Download className="h-3 w-3 md:h-4 md:w-4" />
                 {exportMutation.isPending && <span className="ml-1 text-xs hidden md:inline">...</span>}
               </Button>
-              
+
               {/* Test Button for Development */}
               {process.env.NODE_ENV === 'development' && (
                 <Button
                   onClick={() => {
                     // Simulate workflow creation
-                    window.dispatchEvent(new CustomEvent('workflowCreated', { 
-                      detail: { 
-                        agents: 2, 
+                    window.dispatchEvent(new CustomEvent('workflowCreated', {
+                      detail: {
+                        agents: 2,
                         tasks: 3,
-                        projectId: projectId 
-                      } 
+                        projectId: projectId
+                      }
                     }));
                   }}
                   variant="outline"
@@ -1557,7 +1565,7 @@ function VisualEditorContent() {
               </div>
             </div>
           )}
-          
+
           <ReactFlow
             nodes={nodes}
             edges={edges}
