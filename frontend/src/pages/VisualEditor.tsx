@@ -46,7 +46,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
-import { useChatDockStore } from '@/lib/store';
+import { useChatDockStore, useExecutionControlStore } from '@/lib/store';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Agent } from '@/types/agent';
 import type { Task } from '@/types/task';
@@ -217,6 +217,14 @@ function VisualEditorContent() {
   const location = useLocation();
   const { toast } = useToast();
   const { initializeWithPrompt, addMessage, setOpen: setChatOpen, workflow, messages, isOpen: isChatOpen } = useChatDockStore();
+  const { 
+    isExecuting: globalIsExecuting, 
+    isCreatingWorkflow: globalIsCreatingWorkflow,
+    setIsExecuting: setGlobalIsExecuting,
+    setIsCreatingWorkflow: setGlobalIsCreatingWorkflow,
+    canExecute,
+    canCreateWorkflow
+  } = useExecutionControlStore();
   const queryClient = useQueryClient();
   const reactFlowInstance = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<ReactFlowNode>([]);
@@ -487,10 +495,10 @@ function VisualEditorContent() {
       const { agents, tasks, projectId: eventProjectId } = event.detail;
       
       // Only process if it's for the current project and not already creating
-      if (eventProjectId && String(eventProjectId) === String(projectId) && !isCreatingWorkflow) {
+      if (eventProjectId && String(eventProjectId) === String(projectId) && canCreateWorkflow()) {
         console.log('Workflow created event received:', { agents, tasks, projectId });
         
-        setIsCreatingWorkflow(true);
+        setGlobalIsCreatingWorkflow(true);
         
         // Clear existing workflow first
         setNodes([]);
@@ -517,7 +525,7 @@ function VisualEditorContent() {
         
         // Reset creation state after a delay
         setTimeout(() => {
-          setIsCreatingWorkflow(false);
+          setGlobalIsCreatingWorkflow(false);
         }, 2000);
       }
     };
@@ -526,10 +534,10 @@ function VisualEditorContent() {
       const { projectId: eventProjectId } = event.detail;
       
       // Only process if it's for the current project and no execution is running
-      if (eventProjectId && String(eventProjectId) === String(projectId) && !currentExecution && !isExecuting) {
+      if (eventProjectId && String(eventProjectId) === String(projectId) && !currentExecution && canExecute()) {
         console.log('Executing workflow for project:', projectId);
         
-        setIsExecuting(true);
+        setGlobalIsExecuting(true);
         
         // Add message to chat
         addMessage({
@@ -553,7 +561,7 @@ function VisualEditorContent() {
       window.removeEventListener('workflowCreated', handleWorkflowCreated as EventListener);
       window.removeEventListener('executeWorkflow', handleExecuteWorkflow as EventListener);
     };
-  }, [projectId, queryClient, toast, isCreatingWorkflow, isExecuting]);
+  }, [projectId, queryClient, toast, canCreateWorkflow, canExecute]);
 
   // Auto-refresh when agents/tasks change
   useEffect(() => {
@@ -624,7 +632,7 @@ function VisualEditorContent() {
     mutationFn: (inputs: Record<string, unknown>) => apiClient.run.project(Number(projectId), { inputs, language: 'pt-br' }),
     onSuccess: (data: Execution) => {
       setCurrentExecution(data);
-      setIsExecuting(false);
+      setGlobalIsExecuting(false);
       // Chat será aberto automaticamente pelo ChatDock
       addMessage({ id: `exec-id-${data.id}`, type: 'assistant', content: `Execução iniciada (ID: ${data.id}).`, timestamp: new Date().toISOString() });
       toast({
@@ -633,7 +641,7 @@ function VisualEditorContent() {
       });
     },
     onError: (error: Error) => {
-      setIsExecuting(false);
+      setGlobalIsExecuting(false);
       toast({
         title: "Erro",
         description: "Falha ao executar workflow",
@@ -1004,7 +1012,7 @@ function VisualEditorContent() {
       return;
     }
 
-    if (isExecuting || currentExecution) {
+    if (!canExecute() || currentExecution) {
       toast({
         title: "Execução em andamento",
         description: "Aguarde a execução atual terminar",
@@ -1177,13 +1185,13 @@ function VisualEditorContent() {
           </div>
         )}
         {/* Status Panel */}
-        {(isCreatingWorkflow || isExecuting || currentExecution) && (
+        {(globalIsCreatingWorkflow || globalIsExecuting || currentExecution) && (
           <Panel position="top-center" className="bg-green-100 dark:bg-green-900 rounded-lg shadow-lg border border-green-300 dark:border-green-700 m-4 p-3">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                {isCreatingWorkflow ? (
+                {globalIsCreatingWorkflow ? (
                   <Sparkles className="h-4 w-4 text-white animate-pulse" />
-                ) : isExecuting ? (
+                ) : globalIsExecuting ? (
                   <Zap className="h-4 w-4 text-white animate-spin" />
                 ) : (
                   <Play className="h-4 w-4 text-white" />
@@ -1191,13 +1199,13 @@ function VisualEditorContent() {
               </div>
               <div>
                 <div className="text-sm font-semibold text-green-800 dark:text-green-200">
-                  {isCreatingWorkflow ? 'Criando Workflow...' : 
-                   isExecuting ? 'Executando Workflow...' : 
+                  {globalIsCreatingWorkflow ? 'Criando Workflow...' : 
+                   globalIsExecuting ? 'Executando Workflow...' : 
                    'Workflow em Execução'}
                 </div>
                 <div className="text-xs text-green-600 dark:text-green-300">
-                  {isCreatingWorkflow ? 'Aguarde enquanto o novo fluxo é criado' :
-                   isExecuting ? 'Processando agentes e tarefas' :
+                  {globalIsCreatingWorkflow ? 'Aguarde enquanto o novo fluxo é criado' :
+                   globalIsExecuting ? 'Processando agentes e tarefas' :
                    `ID: ${currentExecution?.id} - Status: ${currentExecution?.status}`}
                 </div>
               </div>
@@ -1255,17 +1263,6 @@ function VisualEditorContent() {
           </Panel>
         )}
 
-        {/* Debug Info */}
-        {process.env.NODE_ENV === 'development' && (
-          <Panel position="top-center" className="bg-yellow-100 dark:bg-yellow-900 rounded-lg shadow-lg border border-yellow-300 dark:border-yellow-700 m-4 p-2">
-            <div className="text-xs text-yellow-800 dark:text-yellow-200">
-              <div>Agents: {agents.length} | Tasks: {tasks.length}</div>
-              <div>Nodes: {nodes.length} | Edges: {edges.length}</div>
-              <div>Running: {runningNodes.size} | Execution: {currentExecution?.status || 'none'}</div>
-              <div>Selected: {selectedNodes.size} | Inspector: {isInspectorOpen ? 'Open' : 'Closed'}</div>
-            </div>
-          </Panel>
-        )}
 
         {/* Clean Toolbar */}
         <Panel position="top-left" className="bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 m-4">
@@ -1292,13 +1289,13 @@ function VisualEditorContent() {
                 onClick={handleRunWorkflow}
                 className="btn-primary gap-1 md:gap-2"
                 size="sm"
-                disabled={runMutation.isPending || !projectId || currentExecution?.status === 'running' || isExecuting || isCreatingWorkflow}
+                disabled={runMutation.isPending || !projectId || currentExecution?.status === 'running' || globalIsExecuting || globalIsCreatingWorkflow}
                 title={!projectId ? "Selecione um projeto primeiro" : "Executar workflow"}
               >
                 <Play className="h-3 w-3 md:h-4 md:w-4" />
                 <span className="text-xs md:text-sm">
-                  {runMutation.isPending || isExecuting ? 'Executando...' : 
-                   isCreatingWorkflow ? 'Criando...' :
+                  {runMutation.isPending || globalIsExecuting ? 'Executando...' : 
+                   globalIsCreatingWorkflow ? 'Criando...' :
                    currentExecution?.status === 'running' ? 'Executando...' : 'Executar'}
                 </span>
               </Button>

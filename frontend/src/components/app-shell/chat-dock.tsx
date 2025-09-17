@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { useChatDockStore } from '@/lib/store';
+import { useChatDockStore, useExecutionControlStore } from '@/lib/store';
 import { apiClient, queryClient, queryKeys } from '@/lib/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -36,6 +36,7 @@ interface ChatMessage {
 
 export function ChatDock() {
   const { isOpen, setOpen, messages, addMessage, clearMessages } = useChatDockStore();
+  const { canExecute, canCreateWorkflow, setIsExecuting, setIsCreatingWorkflow } = useExecutionControlStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [inputValue, setInputValue] = useState('');
@@ -199,7 +200,7 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
             messageText.toLowerCase().includes('execute') ||
             messageText.toLowerCase().includes('rodar');
 
-          if (shouldAutoExecute) {
+          if (shouldAutoExecute && canExecute()) {
             setTimeout(() => {
               addMessage({
                 id: `msg-${Date.now()}-auto-exec`,
@@ -286,7 +287,7 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
 
       // Trigger execution via custom event
       const projectId = await getActiveProjectId();
-      if (projectId) {
+      if (projectId && canExecute()) {
         console.log('Executing workflow for project:', projectId);
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('executeWorkflow', { 
