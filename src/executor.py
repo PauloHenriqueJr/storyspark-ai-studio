@@ -19,7 +19,7 @@ def build_llm(model_provider: str, model_name: str) -> LLM:
         os.environ["OPENAI_API_BASE"] = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
         # Limit max_tokens to avoid credit issues - configurable via env var
         max_tokens_env = os.getenv("MAX_TOKENS")
-        max_tokens = int(max_tokens_env) if max_tokens_env else 1500
+        max_tokens = int(max_tokens_env) if max_tokens_env else 1000
         return LLM(model=model_name, max_tokens=max_tokens)  # CrewAI uses OpenAI-compatible client underneath
 
 def get_language_instruction(language: str) -> str:
