@@ -428,8 +428,8 @@ function VisualEditorContent() {
       }
 
       // Refresh data
-      await qc.invalidateQueries({ queryKey: queryKeys.agents(projectId) });
-      await qc.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.agents(projectId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
 
       toast({
         title: "Template Aplicado",
@@ -471,7 +471,7 @@ function VisualEditorContent() {
       const createdTask = await apiClient.createTask(Number(projectId), taskData);
 
       // Refresh data
-      await qc.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
 
       toast({
         title: "Workflow Criado",
@@ -528,7 +528,7 @@ function VisualEditorContent() {
       }
 
       // Refresh data
-      await qc.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
 
       toast({
         title: "Workflow Criado",
