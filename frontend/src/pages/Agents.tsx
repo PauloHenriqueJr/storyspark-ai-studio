@@ -197,6 +197,21 @@ export default function Agents() {
         setExecutingAgent(agentId);
         executeAgentMutation.mutate(agentId);
         break;
+      case 'visual-editor':
+        if (!selectedProjectId) {
+          toast({
+            title: "Erro",
+            description: "Selecione um projeto antes de abrir o editor visual",
+            variant: "destructive",
+          });
+          return;
+        }
+        navigate(`/app/editor?projectId=${selectedProjectId}&agentId=${agentId}`);
+        toast({
+          title: "Editor Visual",
+          description: `Abrindo editor visual com o agente ${agent?.name}`,
+        });
+        break;
       case 'edit':
         setEditingAgent(agent);
         setIsEditDialogOpen(true);
@@ -489,6 +504,10 @@ export default function Agents() {
                         {executingAgent === agent.id ? 'Executando...' : 'Testar Agente'}
                       </span>
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleAgentAction('visual-editor', agent.id)} className="gap-2">
+                      <Zap className="h-4 w-4 text-purple-600" />
+                      <span>Editor Visual</span>
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleAgentAction('edit', agent.id)} className="gap-2">
                       <Edit className="h-4 w-4 text-blue-600" />
                       <span>Editar</span>
@@ -666,24 +685,69 @@ export default function Agents() {
           
           <ScrollArea className="max-h-[50vh]">
             <div className="space-y-4">
+              {/* Status e Informações Básicas */}
               <div className="bg-muted/50 rounded-lg p-4">
-                <h4 className="font-semibold mb-2">Resultado:</h4>
-                <pre className="whitespace-pre-wrap text-sm font-mono">
-                  {typeof executionResult?.result === 'string' 
-                    ? executionResult.result 
-                    : JSON.stringify(executionResult, null, 2)
-                  }
-                </pre>
+                <h4 className="font-semibold mb-2">Status da Execução:</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Status:</span>
+                    <Badge variant={executionResult?.status === 'completed' ? 'default' : 'destructive'}>
+                      {executionResult?.status || 'Desconhecido'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">ID:</span>
+                    <span className="font-mono">{executionResult?.id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Projeto:</span>
+                    <span className="font-mono">{executionResult?.project_id}</span>
+                  </div>
+                </div>
               </div>
-              
+
+              {/* Resultado Principal */}
+              {executionResult?.output_payload?.result && (
+                <div className="bg-green-50 dark:bg-green-950 rounded-lg p-4">
+                  <h4 className="font-semibold mb-2 text-green-800 dark:text-green-200">Resultado:</h4>
+                  <pre className="whitespace-pre-wrap text-sm font-mono text-green-800 dark:text-green-200">
+                    {typeof executionResult.output_payload.result === 'string' 
+                      ? executionResult.output_payload.result 
+                      : JSON.stringify(executionResult.output_payload.result, null, 2)
+                    }
+                  </pre>
+                </div>
+              )}
+
+              {/* Logs */}
               {executionResult?.logs && (
                 <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-4">
-                  <h4 className="font-semibold mb-2">Logs:</h4>
+                  <h4 className="font-semibold mb-2 text-blue-800 dark:text-blue-200">Logs:</h4>
                   <pre className="whitespace-pre-wrap text-sm font-mono text-blue-800 dark:text-blue-200">
                     {executionResult.logs}
                   </pre>
                 </div>
               )}
+
+              {/* Erro */}
+              {executionResult?.error_message && (
+                <div className="bg-red-50 dark:bg-red-950 rounded-lg p-4">
+                  <h4 className="font-semibold mb-2 text-red-800 dark:text-red-200">Erro:</h4>
+                  <pre className="whitespace-pre-wrap text-sm font-mono text-red-800 dark:text-red-200">
+                    {executionResult.error_message}
+                  </pre>
+                </div>
+              )}
+
+              {/* Dados Completos (para debug) */}
+              <details className="bg-gray-50 dark:bg-gray-950 rounded-lg p-4">
+                <summary className="font-semibold cursor-pointer text-gray-800 dark:text-gray-200">
+                  Dados Completos (Debug)
+                </summary>
+                <pre className="whitespace-pre-wrap text-xs font-mono text-gray-700 dark:text-gray-300 mt-2">
+                  {JSON.stringify(executionResult, null, 2)}
+                </pre>
+              </details>
             </div>
           </ScrollArea>
           

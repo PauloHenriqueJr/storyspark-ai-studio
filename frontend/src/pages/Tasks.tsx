@@ -190,7 +190,7 @@ export default function Tasks() {
           setExecutingTasks(prev => new Set(prev).add(taskId));
           const execution = await apiClient.executeTask(taskId, {
             inputs: {},
-            language: 'pt-br'
+            language: 'pt'
           });
           toast({
             title: "Task Executada",
