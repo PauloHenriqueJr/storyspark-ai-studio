@@ -211,7 +211,11 @@ export default function Tasks() {
             title: "Task Executada",
             description: `Task iniciada com sucesso. ID da execução: ${(execution as any).id}`,
           });
-          // Redirect to executions page or show execution details
+          
+          // Redirect to visual editor to see the results
+          if (selectedProjectId) {
+            navigate(`/app/editor?projectId=${selectedProjectId}`);
+          }
         } catch (error) {
           console.error('Error executing task:', error);
           toast({

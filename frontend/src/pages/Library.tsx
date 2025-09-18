@@ -314,6 +314,12 @@ export default function Library() {
         title: "Template Executado",
         description: "Execução concluída com sucesso!",
       });
+      
+      // Redirect to visual editor to see the results
+      const project = Array.isArray(projects) && projects.length > 0 ? projects[0] : null;
+      if (project) {
+        navigate(`/app/editor?projectId=${project.id}`);
+      }
     },
     onError: (error: Error) => {
       setExecutingTemplate(null);

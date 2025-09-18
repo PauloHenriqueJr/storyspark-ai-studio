@@ -143,6 +143,11 @@ export default function Agents() {
         title: "Agente Executado",
         description: "Execução concluída com sucesso!",
       });
+      
+      // Redirect to visual editor to see the results
+      if (selectedProjectId) {
+        navigate(`/app/editor?projectId=${selectedProjectId}`);
+      }
     },
     onError: (error: Error) => {
       setExecutingAgent(null);
