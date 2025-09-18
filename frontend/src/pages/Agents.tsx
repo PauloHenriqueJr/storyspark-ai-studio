@@ -44,6 +44,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { NewAgentModal } from '@/components/modals/new-agent-modal';
 import { EditAgentModal } from '@/components/modals/edit-agent-modal';
@@ -60,7 +61,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiClient, queryKeys } from '@/lib/api';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 
 export default function Agents() {
   const { toast } = useToast();
@@ -74,6 +75,8 @@ export default function Agents() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [executingAgent, setExecutingAgent] = useState<string | null>(null);
+  const [executionResult, setExecutionResult] = useState<any>(null);
 
   const { data: projects } = useQuery({
     queryKey: ['projects'],
@@ -106,16 +109,60 @@ export default function Agents() {
     (agent.goal || '').toLowerCase().includes(searchTerm.toLowerCase())
   ));
 
+  // Mutation for executing individual agent
+  const executeAgentMutation = useMutation({
+    mutationFn: async (agentId: string) => {
+      const agent = agents.find(a => a.id === agentId);
+      if (!agent) throw new Error('Agente não encontrado');
+      
+      // Create a simple task for the agent
+      const taskData = {
+        description: `Execução individual do agente ${agent.name}`,
+        expected_output: 'Resultado da execução do agente',
+        agent_id: agentId,
+        async_execution: false
+      };
+      
+      // Execute the agent through the project
+      return await apiClient.run.project(Number(selectedProjectId), { 
+        inputs: { task: taskData },
+        language: 'pt'
+      });
+    },
+    onSuccess: (data) => {
+      setExecutionResult(data);
+      setExecutingAgent(null);
+      toast({
+        title: "Agente Executado",
+        description: "Execução concluída com sucesso!",
+      });
+    },
+    onError: (error: Error) => {
+      setExecutingAgent(null);
+      toast({
+        title: "Erro na Execução",
+        description: error.message || "Falha ao executar o agente",
+        variant: "destructive",
+      });
+    },
+  });
+
 
   const handleAgentAction = (action: string, agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
 
     switch (action) {
       case 'test':
-        toast({
-          title: "Testando Agente",
-          description: `Executando teste para ${agent?.name}`,
-        });
+        if (!selectedProjectId) {
+          toast({
+            title: "Erro",
+            description: "Selecione um projeto antes de executar o agente",
+            variant: "destructive",
+          });
+          return;
+        }
+        setExecutingAgent(agentId);
+        executeAgentMutation.mutate(agentId);
         break;
       case 'edit':
         setEditingAgent(agent);
@@ -399,9 +446,15 @@ export default function Agents() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem onClick={() => handleAgentAction('test', agent.id)} className="gap-2">
+                    <DropdownMenuItem 
+                      onClick={() => handleAgentAction('test', agent.id)} 
+                      className="gap-2"
+                      disabled={executingAgent === agent.id || executeAgentMutation.isPending}
+                    >
                       <Play className="h-4 w-4 text-green-600" />
-                      <span>Testar Agente</span>
+                      <span>
+                        {executingAgent === agent.id ? 'Executando...' : 'Testar Agente'}
+                      </span>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleAgentAction('edit', agent.id)} className="gap-2">
                       <Edit className="h-4 w-4 text-blue-600" />
@@ -492,9 +545,10 @@ export default function Agents() {
                   variant="outline"
                   className="flex-1 gap-1.5 hover:bg-primary hover:text-primary-foreground transition-all duration-200 text-xs sm:text-sm"
                   onClick={() => handleAgentAction('test', agent.id)}
+                  disabled={executingAgent === agent.id || executeAgentMutation.isPending}
                 >
                   <Play className="h-3 w-3" />
-                  Testar
+                  {executingAgent === agent.id ? 'Executando...' : 'Testar'}
                 </Button>
                 <Button
                   size="sm"
@@ -563,6 +617,68 @@ export default function Agents() {
           </div>
         )
       }
+
+      {/* Execution Result Modal */}
+      <Dialog open={!!executionResult} onOpenChange={() => setExecutionResult(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              Resultado da Execução
+            </DialogTitle>
+            <DialogDescription>
+              Resultado da execução individual do agente
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="max-h-[50vh]">
+            <div className="space-y-4">
+              <div className="bg-muted/50 rounded-lg p-4">
+                <h4 className="font-semibold mb-2">Resultado:</h4>
+                <pre className="whitespace-pre-wrap text-sm font-mono">
+                  {typeof executionResult?.result === 'string' 
+                    ? executionResult.result 
+                    : JSON.stringify(executionResult, null, 2)
+                  }
+                </pre>
+              </div>
+              
+              {executionResult?.logs && (
+                <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-4">
+                  <h4 className="font-semibold mb-2">Logs:</h4>
+                  <pre className="whitespace-pre-wrap text-sm font-mono text-blue-800 dark:text-blue-200">
+                    {executionResult.logs}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setExecutionResult(null)}
+            >
+              Fechar
+            </Button>
+            <Button 
+              onClick={() => {
+                navigator.clipboard.writeText(
+                  typeof executionResult?.result === 'string' 
+                    ? executionResult.result 
+                    : JSON.stringify(executionResult, null, 2)
+                );
+                toast({
+                  title: "Copiado!",
+                  description: "Resultado copiado para a área de transferência",
+                });
+              }}
+            >
+              Copiar Resultado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div >
   );
 }

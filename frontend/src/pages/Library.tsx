@@ -32,7 +32,19 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { apiClient, queryKeys } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const categories = [
   { id: 'all', name: 'Todos', icon: Globe },
@@ -156,9 +168,61 @@ const templates = [
 
 export default function Library() {
   const { toast } = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('featured');
+  const [executingTemplate, setExecutingTemplate] = useState<string | null>(null);
+  const [executionResult, setExecutionResult] = useState<any>(null);
+
+  // Get projects for template execution
+  const { data: projects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => apiClient.getProjects()
+  });
+
+  // Mutation for executing templates
+  const executeTemplateMutation = useMutation({
+    mutationFn: async (templateId: string) => {
+      const template = templates.find(t => t.id === templateId);
+      if (!template) throw new Error('Template não encontrado');
+      
+      // Get first available project
+      const project = Array.isArray(projects) && projects.length > 0 ? projects[0] : null;
+      if (!project) throw new Error('Nenhum projeto disponível para execução');
+      
+      // Create a task based on template
+      const taskData = {
+        description: `Execução do template: ${template.name}`,
+        expected_output: template.description,
+        async_execution: false
+      };
+      
+      // Execute through the project
+      return await apiClient.run.project(Number(project.id), { 
+        inputs: { task: taskData },
+        language: 'pt'
+      });
+    },
+    onSuccess: (data) => {
+      setExecutionResult(data);
+      setExecutingTemplate(null);
+      toast({
+        title: "Template Executado",
+        description: "Execução concluída com sucesso!",
+      });
+    },
+    onError: (error: Error) => {
+      setExecutingTemplate(null);
+      toast({
+        title: "Erro na Execução",
+        description: error.message || "Falha ao executar o template",
+        variant: "destructive",
+      });
+    },
+  });
 
   const filteredTemplates = templates
     .filter(template => {
@@ -193,6 +257,19 @@ export default function Library() {
       title: "Template Adicionado",
       description: `"${template?.name}" foi adicionado aos seus projetos`,
     });
+  };
+
+  const handleExecuteTemplate = (templateId: string) => {
+    if (!Array.isArray(projects) || projects.length === 0) {
+      toast({
+        title: "Erro",
+        description: "Nenhum projeto disponível para execução",
+        variant: "destructive",
+      });
+      return;
+    }
+    setExecutingTemplate(templateId);
+    executeTemplateMutation.mutate(templateId);
   };
 
   const handleLikeTemplate = (templateId: string) => {
@@ -348,28 +425,41 @@ export default function Library() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          className="flex-1 btn-primary gap-2"
-                          onClick={() => handleUseTemplate(template.id)}
-                        >
-                          <Zap className="h-4 w-4" />
-                          Usar Template
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => handleLikeTemplate(template.id)}
-                        >
-                          <Heart className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => handleBookmarkTemplate(template.id)}
-                        >
-                          <Bookmark className="h-4 w-4" />
-                        </Button>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            className="flex-1 btn-primary gap-2"
+                            onClick={() => handleUseTemplate(template.id)}
+                          >
+                            <Download className="h-4 w-4" />
+                            Usar Template
+                          </Button>
+                          <Button 
+                            className="flex-1 gap-2"
+                            variant="outline"
+                            onClick={() => handleExecuteTemplate(template.id)}
+                            disabled={executingTemplate === template.id || executeTemplateMutation.isPending}
+                          >
+                            <Zap className="h-4 w-4" />
+                            {executingTemplate === template.id ? 'Executando...' : 'Executar'}
+                          </Button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => handleLikeTemplate(template.id)}
+                          >
+                            <Heart className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => handleBookmarkTemplate(template.id)}
+                          >
+                            <Bookmark className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -461,20 +551,33 @@ export default function Library() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        className="flex-1 btn-primary gap-2"
-                        onClick={() => handleUseTemplate(template.id)}
-                      >
-                        <Download className="h-4 w-4" />
-                        Usar
-                      </Button>
-                      <Button size="sm" variant="outline">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="outline">
-                        <Share className="h-4 w-4" />
-                      </Button>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          className="flex-1 btn-primary gap-2"
+                          onClick={() => handleUseTemplate(template.id)}
+                        >
+                          <Download className="h-4 w-4" />
+                          Usar
+                        </Button>
+                        <Button 
+                          className="flex-1 gap-2"
+                          variant="outline"
+                          onClick={() => handleExecuteTemplate(template.id)}
+                          disabled={executingTemplate === template.id || executeTemplateMutation.isPending}
+                        >
+                          <Zap className="h-4 w-4" />
+                          {executingTemplate === template.id ? 'Executando...' : 'Executar'}
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="outline">
+                          <Share className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -520,6 +623,68 @@ export default function Library() {
           <div className="text-sm text-muted-foreground">Avaliação Média</div>
         </div>
       </div>
+
+      {/* Execution Result Modal */}
+      <Dialog open={!!executionResult} onOpenChange={() => setExecutionResult(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary" />
+              Resultado da Execução do Template
+            </DialogTitle>
+            <DialogDescription>
+              Resultado da execução do template
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="max-h-[50vh]">
+            <div className="space-y-4">
+              <div className="bg-muted/50 rounded-lg p-4">
+                <h4 className="font-semibold mb-2">Resultado:</h4>
+                <pre className="whitespace-pre-wrap text-sm font-mono">
+                  {typeof executionResult?.result === 'string' 
+                    ? executionResult.result 
+                    : JSON.stringify(executionResult, null, 2)
+                  }
+                </pre>
+              </div>
+              
+              {executionResult?.logs && (
+                <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-4">
+                  <h4 className="font-semibold mb-2">Logs:</h4>
+                  <pre className="whitespace-pre-wrap text-sm font-mono text-blue-800 dark:text-blue-200">
+                    {executionResult.logs}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setExecutionResult(null)}
+            >
+              Fechar
+            </Button>
+            <Button 
+              onClick={() => {
+                navigator.clipboard.writeText(
+                  typeof executionResult?.result === 'string' 
+                    ? executionResult.result 
+                    : JSON.stringify(executionResult, null, 2)
+                );
+                toast({
+                  title: "Copiado!",
+                  description: "Resultado copiado para a área de transferência",
+                });
+              }}
+            >
+              Copiar Resultado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
