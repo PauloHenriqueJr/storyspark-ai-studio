@@ -44,6 +44,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { NewAgentModal } from '@/components/modals/new-agent-modal';
 import { EditAgentModal } from '@/components/modals/edit-agent-modal';
@@ -60,7 +61,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiClient, queryKeys } from '@/lib/api';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 
 export default function Agents() {
   const { toast } = useToast();
@@ -74,6 +75,8 @@ export default function Agents() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [executingAgent, setExecutingAgent] = useState<string | null>(null);
+  const [executionResult, setExecutionResult] = useState<any>(null);
 
   const { data: projects } = useQuery({
     queryKey: ['projects'],
@@ -106,15 +109,112 @@ export default function Agents() {
     (agent.goal || '').toLowerCase().includes(searchTerm.toLowerCase())
   ));
 
+  // Mutation for executing individual agent
+  const executeAgentMutation = useMutation({
+    mutationFn: async (agentId: string) => {
+      const agent = agents.find(a => a.id === agentId);
+      if (!agent) throw new Error('Agente não encontrado');
+      
+      // Create a simple task for the agent
+      const taskData = {
+        description: `Execução individual do agente ${agent.name}`,
+        expected_output: 'Resultado da execução do agente',
+        agent_id: agentId,
+        async_execution: false
+      };
+      
+      // Execute the agent through the project
+      const execution = await apiClient.run.project(Number(selectedProjectId), { 
+        inputs: { task: taskData },
+        language: 'pt'
+      });
+
+      // Poll for completion if status is running
+      if (execution.status === 'running') {
+        return await pollExecutionCompletion(execution.id);
+      }
+      
+      return execution;
+    },
+    onSuccess: (data) => {
+      setExecutionResult(data);
+      setExecutingAgent(null);
+      toast({
+        title: "Agente Executado",
+        description: "Execução concluída com sucesso!",
+      });
+      
+      // Redirect to visual editor to see the results
+      if (selectedProjectId) {
+        navigate(`/app/editor?projectId=${selectedProjectId}`);
+      }
+    },
+    onError: (error: Error) => {
+      setExecutingAgent(null);
+      toast({
+        title: "Erro na Execução",
+        description: error.message || "Falha ao executar o agente",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Function to poll execution completion
+  const pollExecutionCompletion = async (executionId: number): Promise<any> => {
+    const maxAttempts = 30; // 30 attempts = 30 seconds max
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+      try {
+        const execution = await apiClient.getExecution(executionId);
+        
+        if (execution.status === 'completed' || execution.status === 'failed') {
+          return execution;
+        }
+        
+        // Wait 1 second before next poll
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        attempts++;
+      } catch (error) {
+        console.error('Error polling execution:', error);
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    throw new Error('Execução não foi concluída no tempo esperado');
+  };
+
 
   const handleAgentAction = (action: string, agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
 
     switch (action) {
       case 'test':
+        if (!selectedProjectId) {
+          toast({
+            title: "Erro",
+            description: "Selecione um projeto antes de executar o agente",
+            variant: "destructive",
+          });
+          return;
+        }
+        setExecutingAgent(agentId);
+        executeAgentMutation.mutate(agentId);
+        break;
+      case 'visual-editor':
+        if (!selectedProjectId) {
+          toast({
+            title: "Erro",
+            description: "Selecione um projeto antes de abrir o editor visual",
+            variant: "destructive",
+          });
+          return;
+        }
+        navigate(`/app/editor?projectId=${selectedProjectId}&agentId=${agentId}`);
         toast({
-          title: "Testando Agente",
-          description: `Executando teste para ${agent?.name}`,
+          title: "Editor Visual",
+          description: `Abrindo editor visual com o agente ${agent?.name}`,
         });
         break;
       case 'edit':
@@ -399,9 +499,19 @@ export default function Agents() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem onClick={() => handleAgentAction('test', agent.id)} className="gap-2">
+                    <DropdownMenuItem 
+                      onClick={() => handleAgentAction('test', agent.id)} 
+                      className="gap-2"
+                      disabled={executingAgent === agent.id || executeAgentMutation.isPending}
+                    >
                       <Play className="h-4 w-4 text-green-600" />
-                      <span>Testar Agente</span>
+                      <span>
+                        {executingAgent === agent.id ? 'Executando...' : 'Testar Agente'}
+                      </span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleAgentAction('visual-editor', agent.id)} className="gap-2">
+                      <Zap className="h-4 w-4 text-purple-600" />
+                      <span>Editor Visual</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleAgentAction('edit', agent.id)} className="gap-2">
                       <Edit className="h-4 w-4 text-blue-600" />
@@ -492,9 +602,10 @@ export default function Agents() {
                   variant="outline"
                   className="flex-1 gap-1.5 hover:bg-primary hover:text-primary-foreground transition-all duration-200 text-xs sm:text-sm"
                   onClick={() => handleAgentAction('test', agent.id)}
+                  disabled={executingAgent === agent.id || executeAgentMutation.isPending}
                 >
                   <Play className="h-3 w-3" />
-                  Testar
+                  {executingAgent === agent.id ? 'Executando...' : 'Testar'}
                 </Button>
                 <Button
                   size="sm"
@@ -563,6 +674,113 @@ export default function Agents() {
           </div>
         )
       }
+
+      {/* Execution Result Modal */}
+      <Dialog open={!!executionResult} onOpenChange={() => setExecutionResult(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              Resultado da Execução
+            </DialogTitle>
+            <DialogDescription>
+              Resultado da execução individual do agente
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="max-h-[50vh]">
+            <div className="space-y-4">
+              {/* Status e Informações Básicas */}
+              <div className="bg-muted/50 rounded-lg p-4">
+                <h4 className="font-semibold mb-2">Status da Execução:</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Status:</span>
+                    <Badge variant={executionResult?.status === 'completed' ? 'default' : 'destructive'}>
+                      {executionResult?.status || 'Desconhecido'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">ID:</span>
+                    <span className="font-mono">{executionResult?.id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Projeto:</span>
+                    <span className="font-mono">{executionResult?.project_id}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Resultado Principal */}
+              {executionResult?.output_payload?.result && (
+                <div className="bg-green-50 dark:bg-green-950 rounded-lg p-4">
+                  <h4 className="font-semibold mb-2 text-green-800 dark:text-green-200">Resultado:</h4>
+                  <pre className="whitespace-pre-wrap text-sm font-mono text-green-800 dark:text-green-200">
+                    {typeof executionResult.output_payload.result === 'string' 
+                      ? executionResult.output_payload.result 
+                      : JSON.stringify(executionResult.output_payload.result, null, 2)
+                    }
+                  </pre>
+                </div>
+              )}
+
+              {/* Logs */}
+              {executionResult?.logs && (
+                <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-4">
+                  <h4 className="font-semibold mb-2 text-blue-800 dark:text-blue-200">Logs:</h4>
+                  <pre className="whitespace-pre-wrap text-sm font-mono text-blue-800 dark:text-blue-200">
+                    {executionResult.logs}
+                  </pre>
+                </div>
+              )}
+
+              {/* Erro */}
+              {executionResult?.error_message && (
+                <div className="bg-red-50 dark:bg-red-950 rounded-lg p-4">
+                  <h4 className="font-semibold mb-2 text-red-800 dark:text-red-200">Erro:</h4>
+                  <pre className="whitespace-pre-wrap text-sm font-mono text-red-800 dark:text-red-200">
+                    {executionResult.error_message}
+                  </pre>
+                </div>
+              )}
+
+              {/* Dados Completos (para debug) */}
+              <details className="bg-gray-50 dark:bg-gray-950 rounded-lg p-4">
+                <summary className="font-semibold cursor-pointer text-gray-800 dark:text-gray-200">
+                  Dados Completos (Debug)
+                </summary>
+                <pre className="whitespace-pre-wrap text-xs font-mono text-gray-700 dark:text-gray-300 mt-2">
+                  {JSON.stringify(executionResult, null, 2)}
+                </pre>
+              </details>
+            </div>
+          </ScrollArea>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setExecutionResult(null)}
+            >
+              Fechar
+            </Button>
+            <Button 
+              onClick={() => {
+                navigator.clipboard.writeText(
+                  typeof executionResult?.result === 'string' 
+                    ? executionResult.result 
+                    : JSON.stringify(executionResult, null, 2)
+                );
+                toast({
+                  title: "Copiado!",
+                  description: "Resultado copiado para a área de transferência",
+                });
+              }}
+            >
+              Copiar Resultado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div >
   );
 }

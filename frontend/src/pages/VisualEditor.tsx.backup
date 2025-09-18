@@ -396,40 +396,6 @@ function VisualEditorContent() {
     if (!template || !projectId) return;
 
     try {
-      // First, delete all existing agents and tasks to avoid accumulation
-      console.log('Clearing existing agents and tasks before creating new workflow...');
-      
-      // Delete all existing tasks first (they depend on agents)
-      if (tasks.length > 0) {
-        for (const task of tasks) {
-          try {
-            await apiClient.deleteTask(task.id);
-          } catch (error) {
-            console.warn(`Failed to delete task ${task.id}:`, error);
-          }
-        }
-      }
-      
-      // Delete all existing agents
-      if (agents.length > 0) {
-        for (const agent of agents) {
-          try {
-            await apiClient.deleteAgent(agent.id);
-          } catch (error) {
-            console.warn(`Failed to delete agent ${agent.id}:`, error);
-          }
-        }
-      }
-      
-      // Wait a moment for deletions to complete
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Clear the visual editor
-      setNodes([]);
-      setEdges([]);
-      setCurrentExecution(null);
-      setRunningNodes(new Set());
-      
       // Create agents from template
       const createdAgents = [];
       for (const agentTemplate of template.agents) {
@@ -485,55 +451,6 @@ function VisualEditorContent() {
     }
   }, [templateDefinitions, projectId, queryClient, toast]);
 
-  // Function to clear all agents and tasks for a project
-  const clearAllAgentsAndTasks = useCallback(async (projectId: string) => {
-    if (!projectId) return;
-    
-    try {
-      console.log('Clearing all agents and tasks for project:', projectId);
-      
-      // Get current agents and tasks
-      const currentAgents = await apiClient.getProjectAgents(projectId);
-      const currentTasks = await apiClient.getProjectTasks(projectId);
-      
-      // Delete all tasks first (they depend on agents)
-      if (currentTasks && currentTasks.length > 0) {
-        for (const task of currentTasks) {
-          try {
-            await apiClient.deleteTask(task.id);
-          } catch (error) {
-            console.warn(`Failed to delete task ${task.id}:`, error);
-          }
-        }
-      }
-      
-      // Delete all agents
-      if (currentAgents && currentAgents.length > 0) {
-        for (const agent of currentAgents) {
-          try {
-            await apiClient.deleteAgent(agent.id);
-          } catch (error) {
-            console.warn(`Failed to delete agent ${agent.id}:`, error);
-          }
-        }
-      }
-      
-      // Clear the visual editor
-      setNodes([]);
-      setEdges([]);
-      setCurrentExecution(null);
-      setRunningNodes(new Set());
-      
-      // Refresh data
-      await queryClient.invalidateQueries({ queryKey: queryKeys.agents(projectId) });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
-      
-      console.log('All agents and tasks cleared successfully');
-      
-    } catch (error) {
-      console.error('Error clearing agents and tasks:', error);
-    }
-  }, [queryClient]);
 
   // Auto-create workflow from template or agent
   useEffect(() => {
@@ -610,41 +527,7 @@ function VisualEditorContent() {
     if (!projectId) return;
 
     try {
-      // First, delete all existing agents and tasks to avoid accumulation
-      console.log('Clearing existing agents and tasks before creating new workflow from agent...');
-      
-      // Delete all existing tasks first (they depend on agents)
-      if (tasks.length > 0) {
-        for (const task of tasks) {
-          try {
-            await apiClient.deleteTask(task.id);
-          } catch (error) {
-            console.warn(`Failed to delete task ${task.id}:`, error);
-          }
-        }
-      }
-      
-      // Delete all existing agents
-      if (agents.length > 0) {
-        for (const agent of agents) {
-          try {
-            await apiClient.deleteAgent(agent.id);
-          } catch (error) {
-            console.warn(`Failed to delete agent ${agent.id}:`, error);
-          }
-        }
-      }
-      
-      // Wait a moment for deletions to complete
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Clear the visual editor
-      setNodes([]);
-      setEdges([]);
-      setCurrentExecution(null);
-      setRunningNodes(new Set());
-      
-      // Get agent data (will be recreated)
+      // Get agent data
       const agent = agents.find(a => a.id === agentId);
       if (!agent) return;
 
@@ -686,45 +569,11 @@ function VisualEditorContent() {
     if (!projectId) return;
 
     try {
-      // First, delete all existing agents and tasks to avoid accumulation
-      console.log('Clearing existing agents and tasks before creating new workflow from task...');
-      
-      // Delete all existing tasks first (they depend on agents)
-      if (tasks.length > 0) {
-        for (const task of tasks) {
-          try {
-            await apiClient.deleteTask(task.id);
-          } catch (error) {
-            console.warn(`Failed to delete task ${task.id}:`, error);
-          }
-        }
-      }
-      
-      // Delete all existing agents
-      if (agents.length > 0) {
-        for (const agent of agents) {
-          try {
-            await apiClient.deleteAgent(agent.id);
-          } catch (error) {
-            console.warn(`Failed to delete agent ${agent.id}:`, error);
-          }
-        }
-      }
-      
-      // Wait a moment for deletions to complete
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Clear the visual editor
-      setNodes([]);
-      setEdges([]);
-      setCurrentExecution(null);
-      setRunningNodes(new Set());
-      
-      // Get task data (will be recreated)
+      // Get task data
       const task = tasks.find(t => t.id === taskId);
       if (!task) return;
 
-      // Get agent for the task (will be recreated)
+      // Get agent for the task
       const agent = agents.find(a => a.id === task.agent_id);
       if (!agent) return;
 
@@ -2104,18 +1953,6 @@ return (
             >
               <RotateCcw className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
               <span className="hidden md:inline">Limpar Editor</span>
-            </Button>
-
-            <Button
-              onClick={() => clearAllAgentsAndTasks(projectId)}
-              variant="outline"
-              size="sm"
-              title="Limpar todos os agentes e tasks"
-              className="text-xs md:text-sm"
-              disabled={!projectId || (agents.length === 0 && tasks.length === 0)}
-            >
-              <Trash2 className="h-3 w-3 md:h-4 md:w-4 md:mr-1" />
-              <span className="hidden md:inline">Limpar Tudo</span>
             </Button>
 
 

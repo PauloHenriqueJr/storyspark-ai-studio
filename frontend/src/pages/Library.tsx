@@ -32,7 +32,19 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { apiClient, queryKeys } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const categories = [
   { id: 'all', name: 'Todos', icon: Globe },
@@ -60,7 +72,23 @@ const templates = [
     agents_count: 4,
     tasks_count: 8,
     created_at: '2024-01-15',
-    complexity: 'Intermediate'
+    complexity: 'Intermediate',
+    agents: [
+      { name: 'Character Developer', role: 'Desenvolvedor de Personagens', goal: 'Criar personagens únicos e memoráveis' },
+      { name: 'Plot Designer', role: 'Designer de Enredo', goal: 'Desenvolver tramas envolventes' },
+      { name: 'Dialogue Specialist', role: 'Especialista em Diálogos', goal: 'Criar diálogos naturais e autênticos' },
+      { name: 'World Builder', role: 'Construtor de Mundos', goal: 'Desenvolver ambientes ricos e detalhados' }
+    ],
+    tasks: [
+      { description: 'Analisar perfil do usuário', expected_output: 'Perfil detalhado do usuário' },
+      { description: 'Criar personagem principal', expected_output: 'Personagem principal desenvolvido' },
+      { description: 'Desenvolver enredo base', expected_output: 'Estrutura básica do enredo' },
+      { description: 'Criar diálogos iniciais', expected_output: 'Primeiros diálogos da história' },
+      { description: 'Construir mundo da história', expected_output: 'Ambiente e contexto definidos' },
+      { description: 'Gerar múltiplos finais', expected_output: 'Diferentes opções de conclusão' },
+      { description: 'Revisar narrativa completa', expected_output: 'História finalizada e polida' },
+      { description: 'Formatar para entrega', expected_output: 'História formatada e pronta' }
+    ]
   },
   {
     id: 'social-content-creator',
@@ -78,7 +106,20 @@ const templates = [
     agents_count: 3,
     tasks_count: 6,
     created_at: '2024-01-12',
-    complexity: 'Beginner'
+    complexity: 'Beginner',
+    agents: [
+      { name: 'Content Strategist', role: 'Estrategista de Conteúdo', goal: 'Desenvolver estratégias de conteúdo' },
+      { name: 'Social Media Manager', role: 'Gerente de Redes Sociais', goal: 'Gerenciar presença nas redes sociais' },
+      { name: 'Engagement Specialist', role: 'Especialista em Engajamento', goal: 'Maximizar interação e engajamento' }
+    ],
+    tasks: [
+      { description: 'Analisar tendências atuais', expected_output: 'Relatório de tendências' },
+      { description: 'Criar calendário de conteúdo', expected_output: 'Cronograma de posts' },
+      { description: 'Gerar posts para Instagram', expected_output: 'Posts otimizados para Instagram' },
+      { description: 'Gerar posts para Twitter', expected_output: 'Tweets otimizados' },
+      { description: 'Gerar posts para LinkedIn', expected_output: 'Conteúdo profissional' },
+      { description: 'Otimizar para engajamento', expected_output: 'Conteúdo otimizado' }
+    ]
   },
   {
     id: 'podcast-producer',
@@ -96,7 +137,28 @@ const templates = [
     agents_count: 5,
     tasks_count: 12,
     created_at: '2024-01-10',
-    complexity: 'Advanced'
+    complexity: 'Advanced',
+    agents: [
+      { name: 'Research Specialist', role: 'Especialista em Pesquisa', goal: 'Conduzir pesquisas aprofundadas' },
+      { name: 'Script Writer', role: 'Roteirista', goal: 'Criar roteiros envolventes' },
+      { name: 'Audio Producer', role: 'Produtor de Áudio', goal: 'Produzir conteúdo de áudio' },
+      { name: 'Distribution Manager', role: 'Gerente de Distribuição', goal: 'Gerenciar distribuição do conteúdo' },
+      { name: 'Marketing Coordinator', role: 'Coordenador de Marketing', goal: 'Promover o podcast' }
+    ],
+    tasks: [
+      { description: 'Definir tema do episódio', expected_output: 'Tema e objetivos definidos' },
+      { description: 'Pesquisar conteúdo relevante', expected_output: 'Material de pesquisa coletado' },
+      { description: 'Criar roteiro do episódio', expected_output: 'Roteiro estruturado' },
+      { description: 'Preparar perguntas para entrevista', expected_output: 'Lista de perguntas preparada' },
+      { description: 'Gravar introdução', expected_output: 'Introdução gravada' },
+      { description: 'Conduzir entrevista', expected_output: 'Entrevista realizada' },
+      { description: 'Editar áudio', expected_output: 'Áudio editado e polido' },
+      { description: 'Criar descrição do episódio', expected_output: 'Descrição e tags criadas' },
+      { description: 'Distribuir em plataformas', expected_output: 'Episódio publicado' },
+      { description: 'Promover nas redes sociais', expected_output: 'Promoção realizada' },
+      { description: 'Analisar métricas', expected_output: 'Relatório de performance' },
+      { description: 'Planejar próximo episódio', expected_output: 'Plano para próximo episódio' }
+    ]
   },
   {
     id: 'video-script-writer',
@@ -114,7 +176,18 @@ const templates = [
     agents_count: 2,
     tasks_count: 5,
     created_at: '2024-01-08',
-    complexity: 'Intermediate'
+    complexity: 'Intermediate',
+    agents: [
+      { name: 'Video Script Writer', role: 'Roteirista de Vídeo', goal: 'Criar roteiros envolventes para vídeos' },
+      { name: 'Content Optimizer', role: 'Otimizador de Conteúdo', goal: 'Otimizar conteúdo para diferentes plataformas' }
+    ],
+    tasks: [
+      { description: 'Analisar briefing do vídeo', expected_output: 'Briefing analisado e compreendido' },
+      { description: 'Criar estrutura do roteiro', expected_output: 'Estrutura do roteiro definida' },
+      { description: 'Escrever roteiro completo', expected_output: 'Roteiro completo escrito' },
+      { description: 'Otimizar para plataforma', expected_output: 'Roteiro otimizado para plataforma específica' },
+      { description: 'Revisar e finalizar', expected_output: 'Roteiro finalizado e pronto' }
+    ]
   },
   {
     id: 'brand-storyteller',
@@ -132,7 +205,21 @@ const templates = [
     agents_count: 3,
     tasks_count: 7,
     created_at: '2024-01-05',
-    complexity: 'Intermediate'
+    complexity: 'Intermediate',
+    agents: [
+      { name: 'Brand Storyteller', role: 'Contador de Histórias de Marca', goal: 'Criar narrativas autênticas de marca' },
+      { name: 'Emotional Marketing Specialist', role: 'Especialista em Marketing Emocional', goal: 'Conectar marcas com audiências emocionalmente' },
+      { name: 'Authenticity Expert', role: 'Especialista em Autenticidade', goal: 'Garantir autenticidade nas narrativas' }
+    ],
+    tasks: [
+      { description: 'Analisar identidade da marca', expected_output: 'Identidade da marca compreendida' },
+      { description: 'Identificar audiência-alvo', expected_output: 'Audiência-alvo definida' },
+      { description: 'Criar narrativa principal', expected_output: 'Narrativa principal desenvolvida' },
+      { description: 'Desenvolver elementos emocionais', expected_output: 'Elementos emocionais integrados' },
+      { description: 'Validar autenticidade', expected_output: 'Autenticidade validada' },
+      { description: 'Adaptar para diferentes canais', expected_output: 'Narrativa adaptada para canais' },
+      { description: 'Finalizar estratégia', expected_output: 'Estratégia de storytelling finalizada' }
+    ]
   },
   {
     id: 'content-repurposer',
@@ -150,15 +237,169 @@ const templates = [
     agents_count: 3,
     tasks_count: 6,
     created_at: '2024-01-03',
-    complexity: 'Beginner'
+    complexity: 'Beginner',
+    agents: [
+      { name: 'Content Analyzer', role: 'Analisador de Conteúdo', goal: 'Analisar conteúdo base para reutilização' },
+      { name: 'Format Specialist', role: 'Especialista em Formatos', goal: 'Adaptar conteúdo para diferentes formatos' },
+      { name: 'Platform Optimizer', role: 'Otimizador de Plataforma', goal: 'Otimizar conteúdo para plataformas específicas' }
+    ],
+    tasks: [
+      { description: 'Analisar conteúdo base', expected_output: 'Conteúdo base analisado' },
+      { description: 'Identificar formatos possíveis', expected_output: 'Formatos possíveis identificados' },
+      { description: 'Criar versão para blog', expected_output: 'Versão para blog criada' },
+      { description: 'Criar versão para redes sociais', expected_output: 'Versão para redes sociais criada' },
+      { description: 'Criar versão para vídeo', expected_output: 'Versão para vídeo criada' },
+      { description: 'Otimizar para cada plataforma', expected_output: 'Conteúdo otimizado para cada plataforma' }
+    ]
   },
 ];
 
 export default function Library() {
   const { toast } = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('featured');
+  const [executingTemplate, setExecutingTemplate] = useState<string | null>(null);
+  const [executionResult, setExecutionResult] = useState<any>(null);
+
+  // Get projects for template execution
+  const { data: projects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => apiClient.getProjects()
+  });
+
+  // Mutation for executing templates
+  const executeTemplateMutation = useMutation({
+    mutationFn: async (templateId: string) => {
+      const template = templates.find(t => t.id === templateId);
+      if (!template) throw new Error('Template não encontrado');
+      
+      // Get first available project
+      const project = Array.isArray(projects) && projects.length > 0 ? projects[0] : null;
+      if (!project) throw new Error('Nenhum projeto disponível para execução');
+      
+      // First, create the workflow from template
+      await createWorkflowFromTemplate(templateId, project.id);
+      
+      // Wait a bit for the workflow to be created
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Get the created tasks
+      const projectTasks = await apiClient.getProjectTasks(project.id);
+      if (!Array.isArray(projectTasks) || projectTasks.length === 0) {
+        throw new Error('Nenhuma task foi criada do template');
+      }
+      
+      // Execute the first task
+      const firstTask = projectTasks[0];
+      const execution = await apiClient.run.project(Number(project.id), { 
+        inputs: { task: { id: firstTask.id } },
+        language: 'pt'
+      });
+
+      // Poll for completion if status is running
+      if (execution.status === 'running') {
+        return await pollExecutionCompletion(execution.id);
+      }
+      
+      return execution;
+    },
+    onSuccess: (data) => {
+      setExecutionResult(data);
+      setExecutingTemplate(null);
+      toast({
+        title: "Template Executado",
+        description: "Execução concluída com sucesso!",
+      });
+      
+      // Redirect to visual editor to see the results
+      const project = Array.isArray(projects) && projects.length > 0 ? projects[0] : null;
+      if (project) {
+        navigate(`/app/editor?projectId=${project.id}`);
+      }
+    },
+    onError: (error: Error) => {
+      setExecutingTemplate(null);
+      toast({
+        title: "Erro na Execução",
+        description: error.message || "Falha ao executar o template",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Function to poll execution completion
+  const pollExecutionCompletion = async (executionId: number): Promise<any> => {
+    const maxAttempts = 30; // 30 attempts = 30 seconds max
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+      try {
+        const execution = await apiClient.getExecution(executionId);
+        
+        if (execution.status === 'completed' || execution.status === 'failed') {
+          return execution;
+        }
+        
+        // Wait 1 second before next poll
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        attempts++;
+      } catch (error) {
+        console.error('Error polling execution:', error);
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    throw new Error('Execução não foi concluída no tempo esperado');
+  };
+
+  // Function to create workflow from template
+  const createWorkflowFromTemplate = async (templateId: string, projectId: number) => {
+    const template = templates.find(t => t.id === templateId);
+    if (!template) return;
+
+    try {
+      // Create agents from template
+      const createdAgents = [];
+      for (const agentTemplate of template.agents) {
+        const agentData = {
+          name: agentTemplate.name,
+          role: agentTemplate.role,
+          goal: agentTemplate.goal,
+          backstory: `Especialista em ${agentTemplate.role.toLowerCase()}`,
+          tools: ['WebSearchTool', 'FileReadTool', 'FileWriteTool'],
+          memory: true,
+          allow_delegation: true
+        };
+        
+        const createdAgent = await apiClient.createAgent(projectId, agentData);
+        createdAgents.push(createdAgent);
+      }
+
+      // Create tasks from template
+      const createdTasks = [];
+      for (const taskTemplate of template.tasks) {
+        const taskData = {
+          description: taskTemplate.description,
+          expected_output: taskTemplate.expected_output,
+          agent_id: createdAgents[Math.floor(Math.random() * createdAgents.length)].id,
+          async_execution: false
+        };
+        
+        const createdTask = await apiClient.createTask(projectId, taskData);
+        createdTasks.push(createdTask);
+      }
+
+      return { agents: createdAgents, tasks: createdTasks };
+    } catch (error) {
+      console.error('Error creating workflow from template:', error);
+      throw error;
+    }
+  };
 
   const filteredTemplates = templates
     .filter(template => {
@@ -189,10 +430,38 @@ export default function Library() {
 
   const handleUseTemplate = (templateId: string) => {
     const template = templates.find(t => t.id === templateId);
+    
+    // Get first available project for navigation
+    const project = Array.isArray(projects) && projects.length > 0 ? projects[0] : null;
+    if (!project) {
+      toast({
+        title: "Erro",
+        description: "Nenhum projeto disponível para usar o template",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Navigate to visual editor with the template
+    navigate(`/app/editor?projectId=${project.id}&templateId=${templateId}`);
+    
     toast({
-      title: "Template Adicionado",
-      description: `"${template?.name}" foi adicionado aos seus projetos`,
+      title: "Template Carregado",
+      description: `"${template?.name}" foi carregado no editor visual`,
     });
+  };
+
+  const handleExecuteTemplate = (templateId: string) => {
+    if (!Array.isArray(projects) || projects.length === 0) {
+      toast({
+        title: "Erro",
+        description: "Nenhum projeto disponível para execução",
+        variant: "destructive",
+      });
+      return;
+    }
+    setExecutingTemplate(templateId);
+    executeTemplateMutation.mutate(templateId);
   };
 
   const handleLikeTemplate = (templateId: string) => {
@@ -348,28 +617,41 @@ export default function Library() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          className="flex-1 btn-primary gap-2"
-                          onClick={() => handleUseTemplate(template.id)}
-                        >
-                          <Zap className="h-4 w-4" />
-                          Usar Template
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => handleLikeTemplate(template.id)}
-                        >
-                          <Heart className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => handleBookmarkTemplate(template.id)}
-                        >
-                          <Bookmark className="h-4 w-4" />
-                        </Button>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            className="flex-1 btn-primary gap-2"
+                            onClick={() => handleUseTemplate(template.id)}
+                          >
+                            <Download className="h-4 w-4" />
+                            Usar Template
+                          </Button>
+                          <Button 
+                            className="flex-1 gap-2"
+                            variant="outline"
+                            onClick={() => handleExecuteTemplate(template.id)}
+                            disabled={executingTemplate === template.id || executeTemplateMutation.isPending}
+                          >
+                            <Zap className="h-4 w-4" />
+                            {executingTemplate === template.id ? 'Executando...' : 'Executar'}
+                          </Button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => handleLikeTemplate(template.id)}
+                          >
+                            <Heart className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => handleBookmarkTemplate(template.id)}
+                          >
+                            <Bookmark className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -461,20 +743,33 @@ export default function Library() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        className="flex-1 btn-primary gap-2"
-                        onClick={() => handleUseTemplate(template.id)}
-                      >
-                        <Download className="h-4 w-4" />
-                        Usar
-                      </Button>
-                      <Button size="sm" variant="outline">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="outline">
-                        <Share className="h-4 w-4" />
-                      </Button>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          className="flex-1 btn-primary gap-2"
+                          onClick={() => handleUseTemplate(template.id)}
+                        >
+                          <Download className="h-4 w-4" />
+                          Usar
+                        </Button>
+                        <Button 
+                          className="flex-1 gap-2"
+                          variant="outline"
+                          onClick={() => handleExecuteTemplate(template.id)}
+                          disabled={executingTemplate === template.id || executeTemplateMutation.isPending}
+                        >
+                          <Zap className="h-4 w-4" />
+                          {executingTemplate === template.id ? 'Executando...' : 'Executar'}
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="outline">
+                          <Share className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -520,6 +815,113 @@ export default function Library() {
           <div className="text-sm text-muted-foreground">Avaliação Média</div>
         </div>
       </div>
+
+      {/* Execution Result Modal */}
+      <Dialog open={!!executionResult} onOpenChange={() => setExecutionResult(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary" />
+              Resultado da Execução do Template
+            </DialogTitle>
+            <DialogDescription>
+              Resultado da execução do template
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="max-h-[50vh]">
+            <div className="space-y-4">
+              {/* Status e Informações Básicas */}
+              <div className="bg-muted/50 rounded-lg p-4">
+                <h4 className="font-semibold mb-2">Status da Execução:</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Status:</span>
+                    <Badge variant={executionResult?.status === 'completed' ? 'default' : 'destructive'}>
+                      {executionResult?.status || 'Desconhecido'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">ID:</span>
+                    <span className="font-mono">{executionResult?.id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Projeto:</span>
+                    <span className="font-mono">{executionResult?.project_id}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Resultado Principal */}
+              {executionResult?.output_payload?.result && (
+                <div className="bg-green-50 dark:bg-green-950 rounded-lg p-4">
+                  <h4 className="font-semibold mb-2 text-green-800 dark:text-green-200">Resultado:</h4>
+                  <pre className="whitespace-pre-wrap text-sm font-mono text-green-800 dark:text-green-200">
+                    {typeof executionResult.output_payload.result === 'string' 
+                      ? executionResult.output_payload.result 
+                      : JSON.stringify(executionResult.output_payload.result, null, 2)
+                    }
+                  </pre>
+                </div>
+              )}
+
+              {/* Logs */}
+              {executionResult?.logs && (
+                <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-4">
+                  <h4 className="font-semibold mb-2 text-blue-800 dark:text-blue-200">Logs:</h4>
+                  <pre className="whitespace-pre-wrap text-sm font-mono text-blue-800 dark:text-blue-200">
+                    {executionResult.logs}
+                  </pre>
+                </div>
+              )}
+
+              {/* Erro */}
+              {executionResult?.error_message && (
+                <div className="bg-red-50 dark:bg-red-950 rounded-lg p-4">
+                  <h4 className="font-semibold mb-2 text-red-800 dark:text-red-200">Erro:</h4>
+                  <pre className="whitespace-pre-wrap text-sm font-mono text-red-800 dark:text-red-200">
+                    {executionResult.error_message}
+                  </pre>
+                </div>
+              )}
+
+              {/* Dados Completos (para debug) */}
+              <details className="bg-gray-50 dark:bg-gray-950 rounded-lg p-4">
+                <summary className="font-semibold cursor-pointer text-gray-800 dark:text-gray-200">
+                  Dados Completos (Debug)
+                </summary>
+                <pre className="whitespace-pre-wrap text-xs font-mono text-gray-700 dark:text-gray-300 mt-2">
+                  {JSON.stringify(executionResult, null, 2)}
+                </pre>
+              </details>
+            </div>
+          </ScrollArea>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setExecutionResult(null)}
+            >
+              Fechar
+            </Button>
+            <Button 
+              onClick={() => {
+                navigator.clipboard.writeText(
+                  typeof executionResult?.result === 'string' 
+                    ? executionResult.result 
+                    : JSON.stringify(executionResult, null, 2)
+                );
+                toast({
+                  title: "Copiado!",
+                  description: "Resultado copiado para a área de transferência",
+                });
+              }}
+            >
+              Copiar Resultado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
