@@ -1,7 +1,8 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { CheckSquare, FileText, Clock, AlertCircle } from 'lucide-react';
+import { CheckSquare, FileText, Clock, AlertCircle, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 export interface TaskNodeData {
@@ -13,13 +14,17 @@ export interface TaskNodeData {
   outputFile?: string;
   isCreating?: boolean;
   isRunning?: boolean;
+  executionResult?: string;
+  lastExecution?: string;
 }
 
 const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
+  // Use local data status
+  const nodeState = data.status || 'pending';
   const getStatusColor = () => {
-    switch (data.status) {
+    switch (nodeState) {
       case 'running':
-        return 'bg-blue-500';
+        return 'bg-blue-500 animate-pulse';
       case 'completed':
         return 'bg-green-500';
       case 'failed':
@@ -30,25 +35,41 @@ const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
   };
 
   const getStatusText = () => {
-    switch (data.status) {
+    switch (nodeState) {
       case 'running':
-        return 'Running';
+        return 'Executando...';
       case 'completed':
-        return 'Completed';
+        return 'Concluída';
       case 'failed':
-        return 'Failed';
+        return 'Falhou';
       default:
-        return 'Pending';
+        return 'Aguardando';
     }
   };
 
-  return (
+  const getStatusIcon = () => {
+    switch (nodeState) {
+      case 'running':
+        return <Zap className="h-3 w-3 animate-spin" />;
+      case 'completed':
+        return <CheckSquare className="h-3 w-3" />;
+      case 'failed':
+        return <AlertCircle className="h-3 w-3" />;
+      default:
+        return <Clock className="h-3 w-3" />;
+    }
+  };
+
+  const nodeContent = (
     <div
       className={cn(
         "bg-white dark:bg-gray-900 rounded-xl shadow-md border-2 transition-all duration-200",
-        "min-w-[220px] max-w-[260px] relative",
+        "min-w-[240px] max-w-[280px] relative",
         selected ? "border-primary shadow-lg scale-105" : "border-gray-200 dark:border-gray-700",
-        data.status === 'running' && "animate-pulse",
+        nodeState === 'running' && "border-blue-500 shadow-blue-200 dark:shadow-blue-900/20",
+        nodeState === 'completed' && "border-green-500 shadow-green-200 dark:shadow-green-900/20",
+        nodeState === 'failed' && "border-red-500 shadow-red-200 dark:shadow-red-900/20",
+        nodeState === 'running' && "animate-pulse",
         data.isCreating && "border-primary shadow-lg animate-pulse",
         data.isRunning && "border-blue-500 shadow-lg animate-pulse"
       )}
@@ -91,6 +112,15 @@ const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
         </div>
       </div>
 
+      {/* Running Overlay */}
+      {nodeState === 'running' && (
+        <div className="absolute inset-0 bg-blue-500/10 rounded-xl pointer-events-none">
+          <div className="absolute top-2 right-2">
+            <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+          </div>
+        </div>
+      )}
+
       {/* Status Badge */}
       <div className="px-3 pb-2">
         <div className="flex items-center gap-2">
@@ -98,13 +128,15 @@ const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
             variant="secondary"
             className={cn(
               "text-[10px] px-2 py-0.5",
-              data.status === 'running' && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-              data.status === 'completed' && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-              data.status === 'failed' && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+              nodeState === 'running' && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+              nodeState === 'completed' && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+              nodeState === 'failed' && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
             )}
           >
-            <div className={cn("w-1.5 h-1.5 rounded-full mr-1.5", getStatusColor())} />
-            {getStatusText()}
+            <div className="flex items-center gap-1.5">
+              {getStatusIcon()}
+              {getStatusText()}
+            </div>
           </Badge>
           {data.async && (
             <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">
@@ -147,6 +179,34 @@ const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
       />
     </div>
   );
+
+  // Wrap with tooltip if there are execution results
+  if (data.executionResult && nodeState === 'completed') {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {nodeContent}
+          </TooltipTrigger>
+          <TooltipContent side="right" className="max-w-xs">
+            <div className="space-y-2">
+              <p className="font-semibold text-sm">Resultado da Execução</p>
+              <pre className="text-xs whitespace-pre-wrap bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                {data.executionResult}
+              </pre>
+              {data.lastExecution && (
+                <p className="text-xs text-gray-500">
+                  ID: {data.lastExecution}
+                </p>
+              )}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return nodeContent;
 });
 
 TaskNode.displayName = 'TaskNode';

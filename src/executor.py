@@ -18,12 +18,14 @@ def build_llm(model_provider: str, model_name: str) -> LLM:
         os.environ["OPENAI_API_KEY"] = os.getenv("OPENROUTER_API_KEY", "")
         os.environ["OPENAI_API_BASE"] = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
         # Limit max_tokens to avoid credit issues - configurable via env var
-        max_tokens = int(os.getenv("MAX_TOKENS", "4000"))  # Default 4000 for free tier compatibility
+        max_tokens_env = os.getenv("MAX_TOKENS")
+        max_tokens = int(max_tokens_env) if max_tokens_env else 1500
         return LLM(model=model_name, max_tokens=max_tokens)  # CrewAI uses OpenAI-compatible client underneath
 
 def get_language_instruction(language: str) -> str:
     """Retorna instruções específicas para o idioma"""
     language_map = {
+        "pt": "português brasileiro",
         "pt-br": "português brasileiro",
         "en": "English",
         "es": "español",
@@ -116,20 +118,43 @@ def execute_in_background(execution_id: int, project_id: int, inputs: Dict[str, 
         tasks = db.query(models.Task).filter_by(project_id=project_id).all()
 
         def on_log(chunk: str):
-            exe = db.query(models.Execution).filter_by(id=execution_id).first()
-            if not exe:
-                return
-            exe.logs = (exe.logs or "") + chunk
-            db.add(exe)
-            db.commit()
+            try:
+                exe = db.query(models.Execution).filter_by(id=execution_id).first()
+                if not exe:
+                    return
+                exe.logs = (exe.logs or "") + chunk
+                db.add(exe)
+                db.commit()
+            except Exception:
+                # Ignore logging errors to prevent execution failure
+                pass
 
-        result = execute(project, agents, tasks, inputs, execution_language, on_log=on_log)
-        exe = db.query(models.Execution).filter_by(id=execution_id).first()
-        if exe:
-            exe.status = result.get("status", "done")
-            exe.output_payload = {"result": result.get("result", "")}
-            exe.logs = result.get("logs", exe.logs or "")
-            db.add(exe)
-            db.commit()
+        try:
+            result = execute(project, agents, tasks, inputs, execution_language, on_log=on_log)
+            exe = db.query(models.Execution).filter_by(id=execution_id).first()
+            if exe:
+                exe.status = result.get("status", "completed")
+                if result.get("status") == "error":
+                    logs_blob = result.get("logs") or ""
+                    log_tail = logs_blob.splitlines()
+                    error_message = log_tail[-1].strip() if log_tail else ""
+                    exe.output_payload = {"error": error_message or result.get("result", "")}
+                else:
+                    exe.output_payload = {"result": result.get("result", "")}
+                exe.logs = result.get("logs", exe.logs or "")
+                db.add(exe)
+                db.commit()
+        except Exception as e:
+            # Handle execution errors and update status
+            exe = db.query(models.Execution).filter_by(id=execution_id).first()
+            if exe:
+                exe.status = "error"
+                exe.output_payload = {"error": str(e)}
+                exe.logs = (exe.logs or "") + f"\n[ERROR] Execution failed: {str(e)}"
+                db.add(exe)
+                db.commit()
+    except Exception as e:
+        # Handle database connection errors
+        print(f"Database error in execute_in_background: {e}")
     finally:
         db.close()
