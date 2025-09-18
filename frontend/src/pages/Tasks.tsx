@@ -185,6 +185,21 @@ export default function Tasks() {
     const task = taskObj || (allTasks as any[]).find(t => String(t.id) === String(taskId));
 
     switch (action) {
+      case 'visual-editor':
+        if (!selectedProjectId) {
+          toast({
+            title: "Erro",
+            description: "Selecione um projeto antes de abrir o editor visual",
+            variant: "destructive",
+          });
+          return;
+        }
+        navigate(`/app/editor?projectId=${selectedProjectId}&taskId=${taskId}`);
+        toast({
+          title: "Editor Visual",
+          description: `Abrindo editor visual com a task "${task?.description}"`,
+        });
+        break;
       case 'run':
         try {
           setExecutingTasks(prev => new Set(prev).add(taskId));
@@ -555,6 +570,10 @@ export default function Tasks() {
                       <DropdownMenuItem onClick={() => handleTaskAction('run', task.id)} className="gap-2">
                         <Play className="h-4 w-4 text-green-600" />
                         <span>Executar</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleTaskAction('visual-editor', task.id)} className="gap-2">
+                        <Zap className="h-4 w-4 text-purple-600" />
+                        <span>Editor Visual</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleTaskAction('edit', task.id)} className="gap-2">
                         <Edit className="h-4 w-4 text-blue-600" />

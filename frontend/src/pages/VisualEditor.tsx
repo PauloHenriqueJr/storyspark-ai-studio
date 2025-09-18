@@ -284,6 +284,24 @@ function VisualEditorContent() {
     new URLSearchParams(location.search).get('projectId'), 
     [location.search]
   );
+
+  // Get template ID from URL
+  const templateId = useMemo(() => 
+    new URLSearchParams(location.search).get('templateId'), 
+    [location.search]
+  );
+
+  // Get agent ID from URL
+  const agentId = useMemo(() => 
+    new URLSearchParams(location.search).get('agentId'), 
+    [location.search]
+  );
+
+  // Get task ID from URL
+  const taskId = useMemo(() => 
+    new URLSearchParams(location.search).get('taskId'), 
+    [location.search]
+  );
   const executionsPath = useMemo(() => 
     projectId ? `/app/executions?projectId=${projectId}` : '/app/executions', 
     [projectId]
@@ -305,6 +323,251 @@ function VisualEditorContent() {
   const handleCloseResultBadge = useCallback(() => {
     setShowResultBadge(false);
   }, []);
+
+  // Template definitions for automatic workflow creation
+  const templateDefinitions = useMemo(() => ({
+    'story-generator': {
+      name: 'Gerador de Histórias Interativas',
+      description: 'Cria narrativas personalizadas baseadas no perfil do usuário',
+      agents: [
+        { name: 'Character Developer', role: 'Desenvolvedor de Personagens', goal: 'Criar personagens únicos e memoráveis' },
+        { name: 'Plot Designer', role: 'Designer de Enredo', goal: 'Desenvolver tramas envolventes' },
+        { name: 'Dialogue Specialist', role: 'Especialista em Diálogos', goal: 'Criar diálogos naturais e autênticos' },
+        { name: 'World Builder', role: 'Construtor de Mundos', goal: 'Desenvolver ambientes ricos e detalhados' }
+      ],
+      tasks: [
+        { description: 'Analisar perfil do usuário', expected_output: 'Perfil detalhado do usuário' },
+        { description: 'Criar personagem principal', expected_output: 'Personagem principal desenvolvido' },
+        { description: 'Desenvolver enredo base', expected_output: 'Estrutura básica do enredo' },
+        { description: 'Criar diálogos iniciais', expected_output: 'Primeiros diálogos da história' },
+        { description: 'Construir mundo da história', expected_output: 'Ambiente e contexto definidos' },
+        { description: 'Gerar múltiplos finais', expected_output: 'Diferentes opções de conclusão' },
+        { description: 'Revisar narrativa completa', expected_output: 'História finalizada e polida' },
+        { description: 'Formatar para entrega', expected_output: 'História formatada e pronta' }
+      ]
+    },
+    'social-content-creator': {
+      name: 'Criador de Conteúdo Social',
+      description: 'Automatiza criação de posts para múltiplas redes sociais',
+      agents: [
+        { name: 'Content Strategist', role: 'Estrategista de Conteúdo', goal: 'Desenvolver estratégias de conteúdo' },
+        { name: 'Social Media Manager', role: 'Gerente de Redes Sociais', goal: 'Gerenciar presença nas redes sociais' },
+        { name: 'Engagement Specialist', role: 'Especialista em Engajamento', goal: 'Maximizar interação e engajamento' }
+      ],
+      tasks: [
+        { description: 'Analisar tendências atuais', expected_output: 'Relatório de tendências' },
+        { description: 'Criar calendário de conteúdo', expected_output: 'Cronograma de posts' },
+        { description: 'Gerar posts para Instagram', expected_output: 'Posts otimizados para Instagram' },
+        { description: 'Gerar posts para Twitter', expected_output: 'Tweets otimizados' },
+        { description: 'Gerar posts para LinkedIn', expected_output: 'Conteúdo profissional' },
+        { description: 'Otimizar para engajamento', expected_output: 'Conteúdo otimizado' }
+      ]
+    },
+    'podcast-producer': {
+      name: 'Produtor de Podcast Automatizado',
+      description: 'Pipeline completo para criação de episódios de podcast',
+      agents: [
+        { name: 'Research Specialist', role: 'Especialista em Pesquisa', goal: 'Conduzir pesquisas aprofundadas' },
+        { name: 'Script Writer', role: 'Roteirista', goal: 'Criar roteiros envolventes' },
+        { name: 'Audio Producer', role: 'Produtor de Áudio', goal: 'Produzir conteúdo de áudio' },
+        { name: 'Distribution Manager', role: 'Gerente de Distribuição', goal: 'Gerenciar distribuição do conteúdo' },
+        { name: 'Marketing Coordinator', role: 'Coordenador de Marketing', goal: 'Promover o podcast' }
+      ],
+      tasks: [
+        { description: 'Definir tema do episódio', expected_output: 'Tema e objetivos definidos' },
+        { description: 'Pesquisar conteúdo relevante', expected_output: 'Material de pesquisa coletado' },
+        { description: 'Criar roteiro do episódio', expected_output: 'Roteiro estruturado' },
+        { description: 'Preparar perguntas para entrevista', expected_output: 'Lista de perguntas preparada' },
+        { description: 'Gravar introdução', expected_output: 'Introdução gravada' },
+        { description: 'Conduzir entrevista', expected_output: 'Entrevista realizada' },
+        { description: 'Editar áudio', expected_output: 'Áudio editado e polido' },
+        { description: 'Criar descrição do episódio', expected_output: 'Descrição e tags criadas' },
+        { description: 'Distribuir em plataformas', expected_output: 'Episódio publicado' },
+        { description: 'Promover nas redes sociais', expected_output: 'Promoção realizada' },
+        { description: 'Analisar métricas', expected_output: 'Relatório de performance' },
+        { description: 'Planejar próximo episódio', expected_output: 'Plano para próximo episódio' }
+      ]
+    }
+  }), []);
+
+  // Function to create workflow from template
+  const createWorkflowFromTemplate = useCallback(async (templateId: string) => {
+    const template = templateDefinitions[templateId as keyof typeof templateDefinitions];
+    if (!template || !projectId) return;
+
+    try {
+      // Create agents from template
+      const createdAgents = [];
+      for (const agentTemplate of template.agents) {
+        const agentData = {
+          name: agentTemplate.name,
+          role: agentTemplate.role,
+          goal: agentTemplate.goal,
+          backstory: `Especialista em ${agentTemplate.role.toLowerCase()}`,
+          tools: ['WebSearchTool', 'FileReadTool', 'FileWriteTool'],
+          memory: true,
+          allow_delegation: true
+        };
+        
+        const createdAgent = await apiClient.createAgent(Number(projectId), agentData);
+        createdAgents.push(createdAgent);
+      }
+
+      // Create tasks from template
+      const createdTasks = [];
+      for (const taskTemplate of template.tasks) {
+        const taskData = {
+          description: taskTemplate.description,
+          expected_output: taskTemplate.expected_output,
+          agent_id: createdAgents[Math.floor(Math.random() * createdAgents.length)].id,
+          async_execution: false
+        };
+        
+        const createdTask = await apiClient.createTask(Number(projectId), taskData);
+        createdTasks.push(createdTask);
+      }
+
+      // Refresh data
+      await qc.invalidateQueries({ queryKey: queryKeys.agents(projectId) });
+      await qc.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
+
+      toast({
+        title: "Template Aplicado",
+        description: `Workflow "${template.name}" criado com sucesso!`,
+      });
+
+      // Clear URL parameters
+      const url = new URL(window.location.href);
+      url.searchParams.delete('templateId');
+      window.history.replaceState({}, '', url.toString());
+
+    } catch (error) {
+      console.error('Error creating workflow from template:', error);
+      toast({
+        title: "Erro ao Criar Workflow",
+        description: "Não foi possível criar o workflow do template",
+        variant: "destructive",
+      });
+    }
+  }, [templateDefinitions, projectId, qc, toast]);
+
+  // Function to create workflow from agent
+  const createWorkflowFromAgent = useCallback(async (agentId: string) => {
+    if (!projectId) return;
+
+    try {
+      // Get agent data
+      const agent = agents.find(a => a.id === agentId);
+      if (!agent) return;
+
+      // Create a simple task for the agent
+      const taskData = {
+        description: `Tarefa principal para ${agent.name}`,
+        expected_output: `Resultado da execução de ${agent.name}`,
+        agent_id: agentId,
+        async_execution: false
+      };
+      
+      const createdTask = await apiClient.createTask(Number(projectId), taskData);
+
+      // Refresh data
+      await qc.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
+
+      toast({
+        title: "Workflow Criado",
+        description: `Workflow criado para o agente ${agent.name}!`,
+      });
+
+      // Clear URL parameters
+      const url = new URL(window.location.href);
+      url.searchParams.delete('agentId');
+      window.history.replaceState({}, '', url.toString());
+
+    } catch (error) {
+      console.error('Error creating workflow from agent:', error);
+      toast({
+        title: "Erro ao Criar Workflow",
+        description: "Não foi possível criar o workflow do agente",
+        variant: "destructive",
+      });
+    }
+  }, [projectId, agents, qc, toast]);
+
+  // Function to create workflow from task
+  const createWorkflowFromTask = useCallback(async (taskId: string) => {
+    if (!projectId) return;
+
+    try {
+      // Get task data
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      // Get agent for the task
+      const agent = agents.find(a => a.id === task.agent_id);
+      if (!agent) return;
+
+      // Create additional tasks to form a workflow
+      const additionalTasks = [
+        {
+          description: `Preparação para ${task.description}`,
+          expected_output: `Preparação concluída para ${task.description}`,
+          agent_id: task.agent_id,
+          async_execution: false
+        },
+        {
+          description: `Pós-processamento de ${task.description}`,
+          expected_output: `Pós-processamento concluído para ${task.description}`,
+          agent_id: task.agent_id,
+          async_execution: false
+        }
+      ];
+
+      // Create additional tasks
+      for (const taskData of additionalTasks) {
+        await apiClient.createTask(Number(projectId), taskData);
+      }
+
+      // Refresh data
+      await qc.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
+
+      toast({
+        title: "Workflow Criado",
+        description: `Workflow criado para a task "${task.description}"!`,
+      });
+
+      // Clear URL parameters
+      const url = new URL(window.location.href);
+      url.searchParams.delete('taskId');
+      window.history.replaceState({}, '', url.toString());
+
+    } catch (error) {
+      console.error('Error creating workflow from task:', error);
+      toast({
+        title: "Erro ao Criar Workflow",
+        description: "Não foi possível criar o workflow da task",
+        variant: "destructive",
+      });
+    }
+  }, [projectId, tasks, agents, qc, toast]);
+
+  // Auto-create workflow from template or agent
+  useEffect(() => {
+    if (templateId && projectId && agents.length > 0 && tasks.length > 0) {
+      createWorkflowFromTemplate(templateId);
+    }
+  }, [templateId, projectId, agents.length, tasks.length, createWorkflowFromTemplate]);
+
+  useEffect(() => {
+    if (agentId && projectId && agents.length > 0) {
+      createWorkflowFromAgent(agentId);
+    }
+  }, [agentId, projectId, agents.length, createWorkflowFromAgent]);
+
+  useEffect(() => {
+    if (taskId && projectId && tasks.length > 0 && agents.length > 0) {
+      createWorkflowFromTask(taskId);
+    }
+  }, [taskId, projectId, tasks.length, agents.length, createWorkflowFromTask]);
 
   // Auto-navigate to first project if none selected
   useEffect(() => {
