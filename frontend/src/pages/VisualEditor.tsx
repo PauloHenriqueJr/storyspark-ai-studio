@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import ReactFlow, {
   MiniMap,
   Controls,
@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import { apiClient, queryKeys } from '@/lib/api';
 import {
   Play,
@@ -248,26 +249,40 @@ function VisualEditorContent() {
   const latestExecutionResult = typeof latestExecutionPayload?.result === 'string'
     ? String(latestExecutionPayload.result)
     : '';
-  const resolveExecutionLanguage = useCallback(() => {
-    const raw = (project as { language?: string } | undefined)?.language?.toLowerCase();
-    if (!raw) return 'pt';
-    if (raw === 'pt-br' || raw === 'pt_br') return 'pt';
-    if (['pt', 'en', 'es', 'fr'].includes(raw)) return raw;
-    return 'pt';
-  }, [project]);
 
 
   const executionStatus = currentExecution?.status ?? '';
-  const isExecutionInProgress = ['running', 'pending', 'created'].includes(executionStatus);
-  const executionHasFailed = executionStatus === 'failed' || executionStatus === 'error';
-  const showStatusPanel = globalIsCreatingWorkflow || globalIsExecuting || isExecutionInProgress;
-  const canExecuteWorkflow = !globalIsExecuting && !currentExecution;
-  const canCreateWorkflowReady = !globalIsCreatingWorkflow && !globalIsExecuting;
+  const isExecutionInProgress = useMemo(() => 
+    ['running', 'pending', 'created'].includes(executionStatus), 
+    [executionStatus]
+  );
+  const executionHasFailed = useMemo(() => 
+    executionStatus === 'failed' || executionStatus === 'error', 
+    [executionStatus]
+  );
+  const showStatusPanel = useMemo(() => 
+    globalIsCreatingWorkflow || globalIsExecuting || isExecutionInProgress, 
+    [globalIsCreatingWorkflow, globalIsExecuting, isExecutionInProgress]
+  );
+  const canExecuteWorkflow = useMemo(() => 
+    !globalIsExecuting && !currentExecution, 
+    [globalIsExecuting, currentExecution]
+  );
+  const canCreateWorkflowReady = useMemo(() => 
+    !globalIsCreatingWorkflow && !globalIsExecuting, 
+    [globalIsCreatingWorkflow, globalIsExecuting]
+  );
 
 
   // Get project ID from URL
-  const projectId = new URLSearchParams(location.search).get('projectId');
-  const executionsPath = projectId ? `/app/executions?projectId=${projectId}` : '/app/executions';
+  const projectId = useMemo(() => 
+    new URLSearchParams(location.search).get('projectId'), 
+    [location.search]
+  );
+  const executionsPath = useMemo(() => 
+    projectId ? `/app/executions?projectId=${projectId}` : '/app/executions', 
+    [projectId]
+  );
 
   // Auto-navigate to first project if none selected
   useEffect(() => {
@@ -294,27 +309,66 @@ function VisualEditorContent() {
   }, [projectId]);
 
   // All hooks must be defined before any conditional returns
-  const { data: project } = useQuery({
+  const { data: project, error: projectError } = useQuery({
     queryKey: queryKeys.project(projectId),
     queryFn: () => apiClient.getProject(projectId),
     enabled: !!projectId,
+    retry: 3,
+    retryDelay: 1000,
   });
 
-  const { data: agentsData } = useQuery({
+  const resolveExecutionLanguage = useCallback(() => {
+    const raw = (project as { language?: string } | undefined)?.language?.toLowerCase();
+    if (!raw) return 'pt';
+    if (raw === 'pt-br' || raw === 'pt_br') return 'pt';
+    if (['pt', 'en', 'es', 'fr'].includes(raw)) return raw;
+    return 'pt';
+  }, [project]);
+
+  const { data: agentsData, error: agentsError } = useQuery({
     queryKey: queryKeys.agents(projectId),
     queryFn: () => apiClient.getProjectAgents(projectId),
     enabled: !!projectId,
+    retry: 3,
+    retryDelay: 1000,
   });
 
   const agents: Agent[] = (agentsData as Agent[]) || [];
 
-  const { data: tasksData } = useQuery({
+  const { data: tasksData, error: tasksError } = useQuery({
     queryKey: queryKeys.tasks(projectId),
     queryFn: () => apiClient.getProjectTasks(projectId),
     enabled: !!projectId,
+    retry: 3,
+    retryDelay: 1000,
   });
 
   const tasks: Task[] = (tasksData as Task[]) || [];
+
+  // Handle query errors
+  useEffect(() => {
+    if (projectError) {
+      toast({
+        title: "Erro ao carregar projeto",
+        description: projectError.message || "Falha ao carregar dados do projeto",
+        variant: "destructive",
+      });
+    }
+    if (agentsError) {
+      toast({
+        title: "Erro ao carregar agentes",
+        description: agentsError.message || "Falha ao carregar agentes",
+        variant: "destructive",
+      });
+    }
+    if (tasksError) {
+      toast({
+        title: "Erro ao carregar tarefas",
+        description: tasksError.message || "Falha ao carregar tarefas",
+        variant: "destructive",
+      });
+    }
+  }, [projectError, agentsError, tasksError, toast]);
 
   // Check if we received a prompt from Dashboard and auto-start AI Builder
   useEffect(() => {
@@ -953,6 +1007,39 @@ Detalhes: ${error.message || 'Erro desconhecido'}`,
     },
   });
 
+  const handleRunWorkflow = useCallback(() => {
+    if (!projectId) {
+      toast({
+        title: "Erro",
+        description: "ID do projeto não encontrado",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!canExecuteWorkflow || currentExecution) {
+      toast({
+        title: "Execução em andamento",
+        description: "Aguarde a execução atual terminar",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const inputs = {}; // TODO: collect inputs from UI if available
+
+    // Add message to chat about execution starting
+    addMessage({
+      id: `exec-start-${Date.now()}`,
+      type: 'assistant',
+      content: '🚀 **Iniciando execução do workflow...**\n\n📊 **Status dos componentes:**\n• Agentes: Aguardando execução\n• Tarefas: Aguardando execução\n\n⚡ **Acompanhe o progresso em tempo real nos cards do editor visual!**',
+      timestamp: new Date().toISOString()
+    });
+
+    // Start execution
+    runMutation.mutate(inputs);
+  }, [projectId, canExecuteWorkflow, currentExecution, toast, addMessage, runMutation]);
+
 const exportMutation = useMutation({
   mutationFn: () => apiClient.exportProject(projectId),
   onSuccess: (blob: Blob) => {
@@ -1305,40 +1392,7 @@ const clearAllNodes = useCallback(() => {
   }
 }, [nodes, setNodes, setEdges, toast, projectId, queryClient]);
 
-const handleRunWorkflow = () => {
-  if (!projectId) {
-    toast({
-      title: "Erro",
-      description: "ID do projeto não encontrado",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  if (!canExecuteWorkflow || currentExecution) {
-    toast({
-      title: "Execução em andamento",
-      description: "Aguarde a execução atual terminar",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  const inputs = {}; // TODO: collect inputs from UI if available
-
-  // Add message to chat about execution starting
-  addMessage({
-    id: `exec-start-${Date.now()}`,
-    type: 'assistant',
-    content: '🚀 **Iniciando execução do workflow...**\n\n📊 **Status dos componentes:**\n• Agentes: Aguardando execução\n• Tarefas: Aguardando execução\n\n⚡ **Acompanhe o progresso em tempo real nos cards do editor visual!**',
-    timestamp: new Date().toISOString()
-  });
-
-  // Start execution
-  runMutation.mutate(inputs);
-};
-
-const handleValidate = () => {
+const handleValidate = useCallback(() => {
   if (nodes.length === 0) {
     toast({
       title: "Workflow Inválido",
@@ -1380,9 +1434,9 @@ const handleValidate = () => {
       variant: "destructive",
     });
   }
-};
+}, [nodes, edges, toast]);
 
-const handleAutoLayout = () => {
+const handleAutoLayout = useCallback(() => {
   const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
     nodes,
     edges,
@@ -1395,9 +1449,9 @@ const handleAutoLayout = () => {
     title: "Layout Aplicado",
     description: "Os nós foram reorganizados automaticamente",
   });
-};
+}, [nodes, edges, layoutDirection, setNodes, setEdges, reactFlowInstance, toast]);
 
-const handleExportPNG = () => {
+const handleExportPNG = useCallback(() => {
   if (!projectId) {
     toast({
       title: "Erro",
@@ -1413,7 +1467,7 @@ const handleExportPNG = () => {
     title: "PNG",
     description: "Para PNG, use captura de tela do browser. ZIP foi exportado.",
   });
-};
+}, [projectId, exportMutation, toast]);
 
 // Handle window resize and initialize inspector state
 useEffect(() => {
@@ -1768,7 +1822,7 @@ return (
             </Button>
 
             {/* Test Button for Development */}
-            {process.env.NODE_ENV === 'development' && (
+            {typeof process !== 'undefined' && process.env?.NODE_ENV === 'development' && (
               <Button
                 onClick={() => {
                   // Simulate workflow creation
@@ -1936,8 +1990,10 @@ return (
 
 export default function VisualEditor() {
   return (
-    <ReactFlowProvider>
-      <VisualEditorContent />
-    </ReactFlowProvider>
+    <ErrorBoundary>
+      <ReactFlowProvider>
+        <VisualEditorContent />
+      </ReactFlowProvider>
+    </ErrorBoundary>
   );
 }
