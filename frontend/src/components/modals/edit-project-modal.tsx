@@ -35,7 +35,7 @@ export function EditProjectModal({ open, onOpenChange, project }: EditProjectMod
   const [saving, setSaving] = useState(false);
 
   // keep form in sync when project changes
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   if (project && form.name === '' && open) {
     setForm({
       name: project.name,
