@@ -193,16 +193,22 @@ export default function Library() {
       const project = Array.isArray(projects) && projects.length > 0 ? projects[0] : null;
       if (!project) throw new Error('Nenhum projeto disponível para execução');
       
-      // Create a task based on template
-      const taskData = {
-        description: `Execução do template: ${template.name}`,
-        expected_output: template.description,
-        async_execution: false
-      };
+      // First, create the workflow from template
+      await createWorkflowFromTemplate(templateId, project.id);
       
-      // Execute through the project
+      // Wait a bit for the workflow to be created
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Get the created tasks
+      const projectTasks = await apiClient.getProjectTasks(project.id);
+      if (!Array.isArray(projectTasks) || projectTasks.length === 0) {
+        throw new Error('Nenhuma task foi criada do template');
+      }
+      
+      // Execute the first task
+      const firstTask = projectTasks[0];
       const execution = await apiClient.run.project(Number(project.id), { 
-        inputs: { task: taskData },
+        inputs: { task: { id: firstTask.id } },
         language: 'pt'
       });
 
@@ -255,6 +261,50 @@ export default function Library() {
     }
     
     throw new Error('Execução não foi concluída no tempo esperado');
+  };
+
+  // Function to create workflow from template
+  const createWorkflowFromTemplate = async (templateId: string, projectId: number) => {
+    const template = templates.find(t => t.id === templateId);
+    if (!template) return;
+
+    try {
+      // Create agents from template
+      const createdAgents = [];
+      for (const agentTemplate of template.agents) {
+        const agentData = {
+          name: agentTemplate.name,
+          role: agentTemplate.role,
+          goal: agentTemplate.goal,
+          backstory: `Especialista em ${agentTemplate.role.toLowerCase()}`,
+          tools: ['WebSearchTool', 'FileReadTool', 'FileWriteTool'],
+          memory: true,
+          allow_delegation: true
+        };
+        
+        const createdAgent = await apiClient.createAgent(projectId, agentData);
+        createdAgents.push(createdAgent);
+      }
+
+      // Create tasks from template
+      const createdTasks = [];
+      for (const taskTemplate of template.tasks) {
+        const taskData = {
+          description: taskTemplate.description,
+          expected_output: taskTemplate.expected_output,
+          agent_id: createdAgents[Math.floor(Math.random() * createdAgents.length)].id,
+          async_execution: false
+        };
+        
+        const createdTask = await apiClient.createTask(projectId, taskData);
+        createdTasks.push(createdTask);
+      }
+
+      return { agents: createdAgents, tasks: createdTasks };
+    } catch (error) {
+      console.error('Error creating workflow from template:', error);
+      throw error;
+    }
   };
 
   const filteredTemplates = templates

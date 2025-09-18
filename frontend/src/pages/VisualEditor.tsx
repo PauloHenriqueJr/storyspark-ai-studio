@@ -552,10 +552,10 @@ function VisualEditorContent() {
 
   // Auto-create workflow from template or agent
   useEffect(() => {
-    if (templateId && projectId && agents.length > 0 && tasks.length > 0) {
+    if (templateId && projectId) {
       createWorkflowFromTemplate(templateId);
     }
-  }, [templateId, projectId, agents.length, tasks.length, createWorkflowFromTemplate]);
+  }, [templateId, projectId, createWorkflowFromTemplate]);
 
   useEffect(() => {
     if (agentId && projectId && agents.length > 0) {
