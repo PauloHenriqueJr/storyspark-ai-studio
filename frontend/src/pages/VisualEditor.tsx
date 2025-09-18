@@ -26,6 +26,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
+import { ResultPanel } from '@/components/ResultPanel';
+import { ResultBadge } from '@/components/ResultBadge';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { apiClient, queryKeys } from '@/lib/api';
 import {
@@ -46,7 +48,7 @@ import {
   X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useChatDockStore, useExecutionControlStore } from '@/lib/store';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Agent } from '@/types/agent';
@@ -216,6 +218,7 @@ function VisualEditorContent() {
   const [activeTab, setActiveTab] = useState<'canvas' | 'inspector' | 'toolbox'>('canvas');
   const [showChat, setShowChat] = useState(true);
   const location = useLocation();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { initializeWithPrompt, addMessage, setOpen: setChatOpen, workflow, messages, isOpen: isChatOpen } = useChatDockStore();
   const {
@@ -237,6 +240,8 @@ function VisualEditorContent() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
   const [currentExecution, setCurrentExecution] = useState<Execution | null>(null);
+  const [showResultPanel, setShowResultPanel] = useState(false);
+  const [showResultBadge, setShowResultBadge] = useState(false);
 
   // State for execution control
   const [lastLogSize, setLastLogSize] = useState(0);
@@ -283,6 +288,23 @@ function VisualEditorContent() {
     projectId ? `/app/executions?projectId=${projectId}` : '/app/executions', 
     [projectId]
   );
+
+  const handleNavigateToExecutions = useCallback(() => {
+    navigate(executionsPath);
+  }, [navigate, executionsPath]);
+
+  const handleCloseResultPanel = useCallback(() => {
+    setShowResultPanel(false);
+  }, []);
+
+  const handleShowResultPanel = useCallback(() => {
+    setShowResultPanel(true);
+    setShowResultBadge(false);
+  }, []);
+
+  const handleCloseResultBadge = useCallback(() => {
+    setShowResultBadge(false);
+  }, []);
 
   // Auto-navigate to first project if none selected
   useEffect(() => {
@@ -823,6 +845,9 @@ function VisualEditorContent() {
       content: `Execução concluída!\n\nStatus: ${executionData.status}\nID: ${executionData.id}\nTempo total: ${pollCount * 2}s${resultSection}\n\nAbra ${executionsPath} para revisar o resultado completo.`,
       timestamp: new Date().toISOString(),
     });
+
+    // Show result badge for completed executions
+    setShowResultBadge(true);
   }
 
           clearInterval(executionInterval);
@@ -863,6 +888,9 @@ function VisualEditorContent() {
       content: `Execução falhou.\n\nDetalhes: ${errorDetails}\nID: ${executionData.id}\nTempo: ${pollCount * 2}s\n\nVerifique os logs em ${executionsPath} e tente novamente.`,
       timestamp: new Date().toISOString(),
     });
+
+    // Show result badge for failed executions
+    setShowResultBadge(true);
 
     toast({
       title: 'Execução falhou',
@@ -1572,6 +1600,26 @@ return (
         </Panel>
       )}
 
+      {/* Result Panel */}
+      {showResultPanel && currentExecution && (
+        <Panel position="top-center" className="w-full max-w-4xl mx-auto m-4">
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCloseResultPanel}
+              className="absolute top-2 right-2 z-10 h-8 w-8 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            <ResultPanel
+              execution={currentExecution}
+              onNavigateToExecutions={handleNavigateToExecutions}
+            />
+          </div>
+        </Panel>
+      )}
+
       {/* Selection Panel */}
       {selectedNodes.size > 0 && (
         <Panel position="top-center" className="bg-blue-100 dark:bg-blue-900 rounded-lg shadow-lg border border-blue-300 dark:border-blue-700 m-4 p-3">
@@ -1984,6 +2032,15 @@ return (
           setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
           setIsInspectorOpen(false);
         }}
+      />
+    )}
+
+    {/* Result Badge */}
+    {showResultBadge && currentExecution && (
+      <ResultBadge
+        execution={currentExecution}
+        onShowResult={handleShowResultPanel}
+        onNavigateToExecutions={handleNavigateToExecutions}
       />
     )}
   </div>
