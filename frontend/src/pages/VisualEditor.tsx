@@ -449,7 +449,7 @@ function VisualEditorContent() {
         variant: "destructive",
       });
     }
-  }, [templateDefinitions, projectId, qc, toast]);
+  }, [templateDefinitions, projectId, queryClient, toast]);
 
   // Function to create workflow from agent
   const createWorkflowFromAgent = useCallback(async (agentId: string) => {
@@ -491,7 +491,7 @@ function VisualEditorContent() {
         variant: "destructive",
       });
     }
-  }, [projectId, agents, qc, toast]);
+  }, [projectId, agents, queryClient, toast]);
 
   // Function to create workflow from task
   const createWorkflowFromTask = useCallback(async (taskId: string) => {
@@ -548,7 +548,7 @@ function VisualEditorContent() {
         variant: "destructive",
       });
     }
-  }, [projectId, tasks, agents, qc, toast]);
+  }, [projectId, tasks, agents, queryClient, toast]);
 
   // Auto-create workflow from template or agent
   useEffect(() => {
