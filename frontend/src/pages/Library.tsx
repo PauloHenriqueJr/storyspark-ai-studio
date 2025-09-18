@@ -72,7 +72,23 @@ const templates = [
     agents_count: 4,
     tasks_count: 8,
     created_at: '2024-01-15',
-    complexity: 'Intermediate'
+    complexity: 'Intermediate',
+    agents: [
+      { name: 'Character Developer', role: 'Desenvolvedor de Personagens', goal: 'Criar personagens únicos e memoráveis' },
+      { name: 'Plot Designer', role: 'Designer de Enredo', goal: 'Desenvolver tramas envolventes' },
+      { name: 'Dialogue Specialist', role: 'Especialista em Diálogos', goal: 'Criar diálogos naturais e autênticos' },
+      { name: 'World Builder', role: 'Construtor de Mundos', goal: 'Desenvolver ambientes ricos e detalhados' }
+    ],
+    tasks: [
+      { description: 'Analisar perfil do usuário', expected_output: 'Perfil detalhado do usuário' },
+      { description: 'Criar personagem principal', expected_output: 'Personagem principal desenvolvido' },
+      { description: 'Desenvolver enredo base', expected_output: 'Estrutura básica do enredo' },
+      { description: 'Criar diálogos iniciais', expected_output: 'Primeiros diálogos da história' },
+      { description: 'Construir mundo da história', expected_output: 'Ambiente e contexto definidos' },
+      { description: 'Gerar múltiplos finais', expected_output: 'Diferentes opções de conclusão' },
+      { description: 'Revisar narrativa completa', expected_output: 'História finalizada e polida' },
+      { description: 'Formatar para entrega', expected_output: 'História formatada e pronta' }
+    ]
   },
   {
     id: 'social-content-creator',
@@ -90,7 +106,20 @@ const templates = [
     agents_count: 3,
     tasks_count: 6,
     created_at: '2024-01-12',
-    complexity: 'Beginner'
+    complexity: 'Beginner',
+    agents: [
+      { name: 'Content Strategist', role: 'Estrategista de Conteúdo', goal: 'Desenvolver estratégias de conteúdo' },
+      { name: 'Social Media Manager', role: 'Gerente de Redes Sociais', goal: 'Gerenciar presença nas redes sociais' },
+      { name: 'Engagement Specialist', role: 'Especialista em Engajamento', goal: 'Maximizar interação e engajamento' }
+    ],
+    tasks: [
+      { description: 'Analisar tendências atuais', expected_output: 'Relatório de tendências' },
+      { description: 'Criar calendário de conteúdo', expected_output: 'Cronograma de posts' },
+      { description: 'Gerar posts para Instagram', expected_output: 'Posts otimizados para Instagram' },
+      { description: 'Gerar posts para Twitter', expected_output: 'Tweets otimizados' },
+      { description: 'Gerar posts para LinkedIn', expected_output: 'Conteúdo profissional' },
+      { description: 'Otimizar para engajamento', expected_output: 'Conteúdo otimizado' }
+    ]
   },
   {
     id: 'podcast-producer',
@@ -108,7 +137,28 @@ const templates = [
     agents_count: 5,
     tasks_count: 12,
     created_at: '2024-01-10',
-    complexity: 'Advanced'
+    complexity: 'Advanced',
+    agents: [
+      { name: 'Research Specialist', role: 'Especialista em Pesquisa', goal: 'Conduzir pesquisas aprofundadas' },
+      { name: 'Script Writer', role: 'Roteirista', goal: 'Criar roteiros envolventes' },
+      { name: 'Audio Producer', role: 'Produtor de Áudio', goal: 'Produzir conteúdo de áudio' },
+      { name: 'Distribution Manager', role: 'Gerente de Distribuição', goal: 'Gerenciar distribuição do conteúdo' },
+      { name: 'Marketing Coordinator', role: 'Coordenador de Marketing', goal: 'Promover o podcast' }
+    ],
+    tasks: [
+      { description: 'Definir tema do episódio', expected_output: 'Tema e objetivos definidos' },
+      { description: 'Pesquisar conteúdo relevante', expected_output: 'Material de pesquisa coletado' },
+      { description: 'Criar roteiro do episódio', expected_output: 'Roteiro estruturado' },
+      { description: 'Preparar perguntas para entrevista', expected_output: 'Lista de perguntas preparada' },
+      { description: 'Gravar introdução', expected_output: 'Introdução gravada' },
+      { description: 'Conduzir entrevista', expected_output: 'Entrevista realizada' },
+      { description: 'Editar áudio', expected_output: 'Áudio editado e polido' },
+      { description: 'Criar descrição do episódio', expected_output: 'Descrição e tags criadas' },
+      { description: 'Distribuir em plataformas', expected_output: 'Episódio publicado' },
+      { description: 'Promover nas redes sociais', expected_output: 'Promoção realizada' },
+      { description: 'Analisar métricas', expected_output: 'Relatório de performance' },
+      { description: 'Planejar próximo episódio', expected_output: 'Plano para próximo episódio' }
+    ]
   },
   {
     id: 'video-script-writer',
@@ -126,7 +176,18 @@ const templates = [
     agents_count: 2,
     tasks_count: 5,
     created_at: '2024-01-08',
-    complexity: 'Intermediate'
+    complexity: 'Intermediate',
+    agents: [
+      { name: 'Video Script Writer', role: 'Roteirista de Vídeo', goal: 'Criar roteiros envolventes para vídeos' },
+      { name: 'Content Optimizer', role: 'Otimizador de Conteúdo', goal: 'Otimizar conteúdo para diferentes plataformas' }
+    ],
+    tasks: [
+      { description: 'Analisar briefing do vídeo', expected_output: 'Briefing analisado e compreendido' },
+      { description: 'Criar estrutura do roteiro', expected_output: 'Estrutura do roteiro definida' },
+      { description: 'Escrever roteiro completo', expected_output: 'Roteiro completo escrito' },
+      { description: 'Otimizar para plataforma', expected_output: 'Roteiro otimizado para plataforma específica' },
+      { description: 'Revisar e finalizar', expected_output: 'Roteiro finalizado e pronto' }
+    ]
   },
   {
     id: 'brand-storyteller',
@@ -144,7 +205,21 @@ const templates = [
     agents_count: 3,
     tasks_count: 7,
     created_at: '2024-01-05',
-    complexity: 'Intermediate'
+    complexity: 'Intermediate',
+    agents: [
+      { name: 'Brand Storyteller', role: 'Contador de Histórias de Marca', goal: 'Criar narrativas autênticas de marca' },
+      { name: 'Emotional Marketing Specialist', role: 'Especialista em Marketing Emocional', goal: 'Conectar marcas com audiências emocionalmente' },
+      { name: 'Authenticity Expert', role: 'Especialista em Autenticidade', goal: 'Garantir autenticidade nas narrativas' }
+    ],
+    tasks: [
+      { description: 'Analisar identidade da marca', expected_output: 'Identidade da marca compreendida' },
+      { description: 'Identificar audiência-alvo', expected_output: 'Audiência-alvo definida' },
+      { description: 'Criar narrativa principal', expected_output: 'Narrativa principal desenvolvida' },
+      { description: 'Desenvolver elementos emocionais', expected_output: 'Elementos emocionais integrados' },
+      { description: 'Validar autenticidade', expected_output: 'Autenticidade validada' },
+      { description: 'Adaptar para diferentes canais', expected_output: 'Narrativa adaptada para canais' },
+      { description: 'Finalizar estratégia', expected_output: 'Estratégia de storytelling finalizada' }
+    ]
   },
   {
     id: 'content-repurposer',
@@ -162,7 +237,20 @@ const templates = [
     agents_count: 3,
     tasks_count: 6,
     created_at: '2024-01-03',
-    complexity: 'Beginner'
+    complexity: 'Beginner',
+    agents: [
+      { name: 'Content Analyzer', role: 'Analisador de Conteúdo', goal: 'Analisar conteúdo base para reutilização' },
+      { name: 'Format Specialist', role: 'Especialista em Formatos', goal: 'Adaptar conteúdo para diferentes formatos' },
+      { name: 'Platform Optimizer', role: 'Otimizador de Plataforma', goal: 'Otimizar conteúdo para plataformas específicas' }
+    ],
+    tasks: [
+      { description: 'Analisar conteúdo base', expected_output: 'Conteúdo base analisado' },
+      { description: 'Identificar formatos possíveis', expected_output: 'Formatos possíveis identificados' },
+      { description: 'Criar versão para blog', expected_output: 'Versão para blog criada' },
+      { description: 'Criar versão para redes sociais', expected_output: 'Versão para redes sociais criada' },
+      { description: 'Criar versão para vídeo', expected_output: 'Versão para vídeo criada' },
+      { description: 'Otimizar para cada plataforma', expected_output: 'Conteúdo otimizado para cada plataforma' }
+    ]
   },
 ];
 
