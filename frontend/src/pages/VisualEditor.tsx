@@ -451,6 +451,88 @@ function VisualEditorContent() {
     }
   }, [templateDefinitions, projectId, queryClient, toast]);
 
+
+  // Auto-create workflow from template or agent
+  useEffect(() => {
+    if (templateId && projectId) {
+      createWorkflowFromTemplate(templateId);
+    }
+  }, [templateId, projectId, createWorkflowFromTemplate]);
+
+  useEffect(() => {
+    if (agentId && projectId && agents.length > 0) {
+      createWorkflowFromAgent(agentId);
+    }
+  }, [agentId, projectId, agents.length, createWorkflowFromAgent]);
+
+  useEffect(() => {
+    if (taskId && projectId && tasks.length > 0 && agents.length > 0) {
+      createWorkflowFromTask(taskId);
+    }
+  }, [taskId, projectId, tasks.length, agents.length, createWorkflowFromTask]);
+
+  // Auto-navigate to first project if none selected
+  useEffect(() => {
+    const checkAndRedirect = async () => {
+      if (!projectId) {
+        try {
+          const projects = await apiClient.getProjects();
+          if (Array.isArray(projects) && projects.length > 0) {
+            window.location.href = `/app/editor?projectId=${projects[0].id}`;
+          }
+        } catch (e) {
+          console.error('Failed to load projects:', e);
+        }
+      } else {
+        // Clear editor when project changes
+        setNodes([]);
+        setEdges([]);
+        setCurrentExecution(null);
+        lastExecutionStatusRef.current = null;
+        setRunningNodes(new Set());
+      }
+    };
+    checkAndRedirect();
+  }, [projectId]);
+
+  // All hooks must be defined before any conditional returns
+  const { data: project, error: projectError } = useQuery({
+    queryKey: queryKeys.project(projectId),
+    queryFn: () => apiClient.getProject(projectId),
+    enabled: !!projectId,
+    retry: 3,
+    retryDelay: 1000,
+  });
+
+  const resolveExecutionLanguage = useCallback(() => {
+    const raw = (project as { language?: string } | undefined)?.language?.toLowerCase();
+    if (!raw) return 'pt';
+    if (raw === 'pt-br' || raw === 'pt_br') return 'pt';
+    if (['pt', 'en', 'es', 'fr'].includes(raw)) return raw;
+    return 'pt';
+  }, [project]);
+
+
+  const { data: agentsData, error: agentsError } = useQuery({
+    queryKey: queryKeys.agents(projectId),
+    queryFn: () => apiClient.getProjectAgents(projectId),
+    enabled: !!projectId,
+    retry: 3,
+    retryDelay: 1000,
+  });
+
+  const agents: Agent[] = (agentsData as Agent[]) || [];
+
+  const { data: tasksData, error: tasksError } = useQuery({
+    queryKey: queryKeys.tasks(projectId),
+    queryFn: () => apiClient.getProjectTasks(projectId),
+    enabled: !!projectId,
+    retry: 3,
+    retryDelay: 1000,
+  });
+
+  const tasks: Task[] = (tasksData as Task[]) || [];
+
   // Function to create workflow from agent
   const createWorkflowFromAgent = useCallback(async (agentId: string) => {
     if (!projectId) return;
@@ -549,87 +631,6 @@ function VisualEditorContent() {
       });
     }
   }, [projectId, tasks, agents, queryClient, toast]);
-
-  // Auto-create workflow from template or agent
-  useEffect(() => {
-    if (templateId && projectId) {
-      createWorkflowFromTemplate(templateId);
-    }
-  }, [templateId, projectId, createWorkflowFromTemplate]);
-
-  useEffect(() => {
-    if (agentId && projectId && agents.length > 0) {
-      createWorkflowFromAgent(agentId);
-    }
-  }, [agentId, projectId, agents.length, createWorkflowFromAgent]);
-
-  useEffect(() => {
-    if (taskId && projectId && tasks.length > 0 && agents.length > 0) {
-      createWorkflowFromTask(taskId);
-    }
-  }, [taskId, projectId, tasks.length, agents.length, createWorkflowFromTask]);
-
-  // Auto-navigate to first project if none selected
-  useEffect(() => {
-    const checkAndRedirect = async () => {
-      if (!projectId) {
-        try {
-          const projects = await apiClient.getProjects();
-          if (Array.isArray(projects) && projects.length > 0) {
-            window.location.href = `/app/editor?projectId=${projects[0].id}`;
-          }
-        } catch (e) {
-          console.error('Failed to load projects:', e);
-        }
-      } else {
-        // Clear editor when project changes
-        setNodes([]);
-        setEdges([]);
-        setCurrentExecution(null);
-        lastExecutionStatusRef.current = null;
-        setRunningNodes(new Set());
-      }
-    };
-    checkAndRedirect();
-  }, [projectId]);
-
-  // All hooks must be defined before any conditional returns
-  const { data: project, error: projectError } = useQuery({
-    queryKey: queryKeys.project(projectId),
-    queryFn: () => apiClient.getProject(projectId),
-    enabled: !!projectId,
-    retry: 3,
-    retryDelay: 1000,
-  });
-
-  const resolveExecutionLanguage = useCallback(() => {
-    const raw = (project as { language?: string } | undefined)?.language?.toLowerCase();
-    if (!raw) return 'pt';
-    if (raw === 'pt-br' || raw === 'pt_br') return 'pt';
-    if (['pt', 'en', 'es', 'fr'].includes(raw)) return raw;
-    return 'pt';
-  }, [project]);
-
-
-  const { data: agentsData, error: agentsError } = useQuery({
-    queryKey: queryKeys.agents(projectId),
-    queryFn: () => apiClient.getProjectAgents(projectId),
-    enabled: !!projectId,
-    retry: 3,
-    retryDelay: 1000,
-  });
-
-  const agents: Agent[] = (agentsData as Agent[]) || [];
-
-  const { data: tasksData, error: tasksError } = useQuery({
-    queryKey: queryKeys.tasks(projectId),
-    queryFn: () => apiClient.getProjectTasks(projectId),
-    enabled: !!projectId,
-    retry: 3,
-    retryDelay: 1000,
-  });
-
-  const tasks: Task[] = (tasksData as Task[]) || [];
 
   // Handle query errors
   useEffect(() => {
