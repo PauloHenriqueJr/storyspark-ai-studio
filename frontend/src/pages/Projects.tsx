@@ -112,7 +112,7 @@ export default function Projects() {
       const original = projects.find((p: any) => String(p.id) === String(projectId));
       if (!original) return;
       // ensure unique name
-      let base = `${original.name} (copy)`; let name = base; let n = 2;
+      const base = `${original.name} (copy)`; let name = base; let n = 2;
       const names = new Set(projects.map((p: any) => p.name));
       while (names.has(name)) { name = `${base} ${n}`; n++; }
 
