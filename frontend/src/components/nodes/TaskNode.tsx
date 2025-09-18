@@ -2,8 +2,8 @@ import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { CheckSquare, FileText, Clock, AlertCircle, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { useExecutionControlStore } from '@/lib/store';
 
 export interface TaskNodeData {
   description: string;
@@ -14,16 +14,13 @@ export interface TaskNodeData {
   outputFile?: string;
   isCreating?: boolean;
   isRunning?: boolean;
+  executionResult?: string;
+  lastExecution?: string;
 }
 
 const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
-  const { nodeStates } = useExecutionControlStore();
-  
-  // Use global state if available, fallback to local data
-  const nodeState = nodeStates[data.description] || data.status || 'idle';
-  
-  // Debug: Log status changes
-  console.log('TaskNode render:', { id: data.description, localStatus: data.status, globalStatus: nodeState });
+  // Use local data status
+  const nodeState = data.status || 'pending';
   const getStatusColor = () => {
     switch (nodeState) {
       case 'running':
@@ -63,11 +60,11 @@ const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
     }
   };
 
-  return (
+  const nodeContent = (
     <div
       className={cn(
         "bg-white dark:bg-gray-900 rounded-xl shadow-md border-2 transition-all duration-200",
-        "min-w-[220px] max-w-[260px] relative",
+        "min-w-[240px] max-w-[280px] relative",
         selected ? "border-primary shadow-lg scale-105" : "border-gray-200 dark:border-gray-700",
         nodeState === 'running' && "border-blue-500 shadow-blue-200 dark:shadow-blue-900/20",
         nodeState === 'completed' && "border-green-500 shadow-green-200 dark:shadow-green-900/20",
@@ -182,6 +179,34 @@ const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
       />
     </div>
   );
+
+  // Wrap with tooltip if there are execution results
+  if (data.executionResult && nodeState === 'completed') {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {nodeContent}
+          </TooltipTrigger>
+          <TooltipContent side="right" className="max-w-xs">
+            <div className="space-y-2">
+              <p className="font-semibold text-sm">Resultado da Execução</p>
+              <pre className="text-xs whitespace-pre-wrap bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                {data.executionResult}
+              </pre>
+              {data.lastExecution && (
+                <p className="text-xs text-gray-500">
+                  ID: {data.lastExecution}
+                </p>
+              )}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return nodeContent;
 });
 
 TaskNode.displayName = 'TaskNode';

@@ -2,8 +2,8 @@ import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { Users, Bot, Brain, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { useExecutionControlStore } from '@/lib/store';
 
 export interface AgentNodeData {
   name: string;
@@ -14,16 +14,13 @@ export interface AgentNodeData {
   delegation?: boolean;
   isCreating?: boolean;
   isRunning?: boolean;
+  executionResult?: string;
+  lastExecution?: string;
 }
 
 const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
-  const { nodeStates } = useExecutionControlStore();
-  
-  // Use global state if available, fallback to local data
-  const nodeState = nodeStates[data.name] || data.status || 'idle';
-  
-  // Debug: Log status changes
-  console.log('AgentNode render:', { id: data.name, localStatus: data.status, globalStatus: nodeState });
+  // Use local data status
+  const nodeState = data.status || 'idle';
   const getStatusColor = () => {
     switch (nodeState) {
       case 'running':
@@ -63,7 +60,7 @@ const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
     }
   };
 
-  return (
+  const nodeContent = (
     <div
       className={cn(
         "bg-white dark:bg-gray-900 rounded-xl shadow-md border-2 transition-all duration-200",
@@ -192,6 +189,34 @@ const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
       />
     </div>
   );
+
+  // Wrap with tooltip if there are execution results
+  if (data.executionResult && nodeState === 'completed') {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {nodeContent}
+          </TooltipTrigger>
+          <TooltipContent side="right" className="max-w-xs">
+            <div className="space-y-2">
+              <p className="font-semibold text-sm">Resultado da Execução</p>
+              <pre className="text-xs whitespace-pre-wrap bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                {data.executionResult}
+              </pre>
+              {data.lastExecution && (
+                <p className="text-xs text-gray-500">
+                  ID: {data.lastExecution}
+                </p>
+              )}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return nodeContent;
 });
 
 AgentNode.displayName = 'AgentNode';
