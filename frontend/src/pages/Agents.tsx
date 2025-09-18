@@ -124,10 +124,17 @@ export default function Agents() {
       };
       
       // Execute the agent through the project
-      return await apiClient.run.project(Number(selectedProjectId), { 
+      const execution = await apiClient.run.project(Number(selectedProjectId), { 
         inputs: { task: taskData },
         language: 'pt'
       });
+
+      // Poll for completion if status is running
+      if (execution.status === 'running') {
+        return await pollExecutionCompletion(execution.id);
+      }
+      
+      return execution;
     },
     onSuccess: (data) => {
       setExecutionResult(data);
@@ -146,6 +153,32 @@ export default function Agents() {
       });
     },
   });
+
+  // Function to poll execution completion
+  const pollExecutionCompletion = async (executionId: number): Promise<any> => {
+    const maxAttempts = 30; // 30 attempts = 30 seconds max
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+      try {
+        const execution = await apiClient.getExecution(executionId);
+        
+        if (execution.status === 'completed' || execution.status === 'failed') {
+          return execution;
+        }
+        
+        // Wait 1 second before next poll
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        attempts++;
+      } catch (error) {
+        console.error('Error polling execution:', error);
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    throw new Error('Execução não foi concluída no tempo esperado');
+  };
 
 
   const handleAgentAction = (action: string, agentId: string) => {

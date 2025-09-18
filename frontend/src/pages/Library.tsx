@@ -201,10 +201,17 @@ export default function Library() {
       };
       
       // Execute through the project
-      return await apiClient.run.project(Number(project.id), { 
+      const execution = await apiClient.run.project(Number(project.id), { 
         inputs: { task: taskData },
         language: 'pt'
       });
+
+      // Poll for completion if status is running
+      if (execution.status === 'running') {
+        return await pollExecutionCompletion(execution.id);
+      }
+      
+      return execution;
     },
     onSuccess: (data) => {
       setExecutionResult(data);
@@ -223,6 +230,32 @@ export default function Library() {
       });
     },
   });
+
+  // Function to poll execution completion
+  const pollExecutionCompletion = async (executionId: number): Promise<any> => {
+    const maxAttempts = 30; // 30 attempts = 30 seconds max
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+      try {
+        const execution = await apiClient.getExecution(executionId);
+        
+        if (execution.status === 'completed' || execution.status === 'failed') {
+          return execution;
+        }
+        
+        // Wait 1 second before next poll
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        attempts++;
+      } catch (error) {
+        console.error('Error polling execution:', error);
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    throw new Error('Execução não foi concluída no tempo esperado');
+  };
 
   const filteredTemplates = templates
     .filter(template => {
@@ -253,9 +286,24 @@ export default function Library() {
 
   const handleUseTemplate = (templateId: string) => {
     const template = templates.find(t => t.id === templateId);
+    
+    // Get first available project for navigation
+    const project = Array.isArray(projects) && projects.length > 0 ? projects[0] : null;
+    if (!project) {
+      toast({
+        title: "Erro",
+        description: "Nenhum projeto disponível para usar o template",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Navigate to visual editor with the template
+    navigate(`/app/visual-editor?projectId=${project.id}&templateId=${templateId}`);
+    
     toast({
-      title: "Template Adicionado",
-      description: `"${template?.name}" foi adicionado aos seus projetos`,
+      title: "Template Carregado",
+      description: `"${template?.name}" foi carregado no editor visual`,
     });
   };
 
