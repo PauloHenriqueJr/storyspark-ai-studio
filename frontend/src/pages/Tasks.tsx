@@ -26,7 +26,8 @@ import {
   AlertCircle,
   FolderOpen,
   Users,
-  ChevronDown
+  ChevronDown,
+  Zap
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -55,12 +56,14 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { apiClient, queryKeys } from '@/lib/api';
 import { NewTaskModal } from '@/components/modals/new-task-modal';
 import { EditTaskModal } from '@/components/modals/edit-task-modal';
 
 export default function Tasks() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);

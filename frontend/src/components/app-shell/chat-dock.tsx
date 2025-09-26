@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { useChatDockStore } from '@/lib/store';
+import { useChatDockStore, useProjectStore, useSettingsStore } from '@/lib/store';
 import { apiClient, queryClient, queryKeys } from '@/lib/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -18,6 +18,7 @@ import {
   Lightbulb
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { Project } from '@/types/project';
 const quickSuggestions = [
   'Criar um sistema de atendimento ao cliente',
   'Gerar um agente de análise de dados',
@@ -216,7 +217,6 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
 
               // Trigger workflow execution via custom event (only once)
               setTimeout(() => {
-                console.log('Dispatching executeWorkflow event for project:', projectIdNum);
                 window.dispatchEvent(new CustomEvent('executeWorkflow', {
                   detail: { projectId: projectIdNum }
                 }));
@@ -231,12 +231,6 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
 
         // Update workflow in store to trigger visual editor update
         setTimeout(() => {
-          console.log('Dispatching workflowCreated event:', {
-            agents: res?.created_agents || 0,
-            tasks: res?.created_tasks || 0,
-            projectId: projectIdNum
-          });
-
           // Trigger a custom event to notify the visual editor
           window.dispatchEvent(new CustomEvent('workflowCreated', {
             detail: {
@@ -293,7 +287,6 @@ ${cleanPlan ? `\n📝 **Plano de Execução:**\n${cleanPlan}` : ''}
       // Trigger execution via custom event
       const projectId = await getActiveProjectId();
       if (projectId && canExecute()) {
-        console.log('Executing workflow for project:', projectId);
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('executeWorkflow', {
             detail: { projectId }

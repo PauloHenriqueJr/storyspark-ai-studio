@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Plug,
   Eye,
@@ -21,7 +23,8 @@ import {
   CreditCard,
   Search,
   RefreshCw,
-  Unplug
+  Unplug,
+  Settings
 } from 'lucide-react';
 import { INTEGRATIONS, type Integration } from '@/types/settings';
 import { toast } from '@/components/ui/sonner';
@@ -36,12 +39,49 @@ const API_BASE_URL =
     (process as any).env?.NEXT_PUBLIC_API_BASE_URL) ||
   "http://localhost:8000";
 
+// Available models for each provider
+const AVAILABLE_MODELS = {
+  openrouter: [
+    { id: 'openrouter/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI' },
+    { id: 'openrouter/gpt-4o', name: 'GPT-4o', provider: 'OpenAI' },
+    { id: 'openrouter/gpt-4-turbo', name: 'GPT-4 Turbo', provider: 'OpenAI' },
+    { id: 'openrouter/claude-3-haiku', name: 'Claude 3 Haiku', provider: 'Anthropic' },
+    { id: 'openrouter/claude-3-sonnet', name: 'Claude 3 Sonnet', provider: 'Anthropic' },
+    { id: 'openrouter/gemini-pro', name: 'Gemini Pro', provider: 'Google' },
+  ],
+  gemini: [
+    { id: 'gemini/gemini-pro', name: 'Gemini Pro', provider: 'Google' },
+    { id: 'gemini/gemini-1.5-flash', name: 'Gemini 1.5 Flash', provider: 'Google' },
+    { id: 'gemini/gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'Google' },
+    { id: 'gemini/gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google' },
+  ],
+  openai: [
+    { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI' },
+    { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'OpenAI' },
+    { id: 'openai/gpt-4-turbo', name: 'GPT-4 Turbo', provider: 'OpenAI' },
+  ],
+  anthropic: [
+    { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', provider: 'Anthropic' },
+    { id: 'anthropic/claude-3-sonnet', name: 'Claude 3 Sonnet', provider: 'Anthropic' },
+  ]
+};
+
+const SEQUENTIAL_SETTING_KEYS: Record<string, string> = {
+  openrouter: 'OPENROUTER_FORCE_SEQUENTIAL',
+  gemini: 'GEMINI_FORCE_SEQUENTIAL',
+  openai: 'OPENAI_FORCE_SEQUENTIAL',
+  anthropic: 'ANTHROPIC_FORCE_SEQUENTIAL',
+};
+
 export default function Integrations() {
   const [integrations, setIntegrations] = useState(INTEGRATIONS);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [testResults, setTestResults] = useState<Record<string, 'success' | 'error' | 'testing' | null>>({});
   const [savingIntegrations, setSavingIntegrations] = useState<Set<string>>(new Set());
+  const [selectedModels, setSelectedModels] = useState<Record<string, string>>({});
+  const [customModels, setCustomModels] = useState<Record<string, string>>({});
+  const [sequentialFlags, setSequentialFlags] = useState<Record<string, boolean>>({});
 
   // Load configured settings from backend and flag configured integrations
   const { data: settings } = useQuery({
@@ -59,6 +99,52 @@ export default function Integrations() {
     }));
     if (JSON.stringify(updated) !== JSON.stringify(integrations)) setIntegrations(updated);
   }
+
+  // Initialize selected models from settings
+  useState(() => {
+    const initialModels: Record<string, string> = {};
+    const initialCustomModels: Record<string, string> = {};
+    if (settings) {
+      const settingsArray = settings as any[];
+      settingsArray.forEach(setting => {
+        if (setting.key.startsWith('DEFAULT_MODEL_')) {
+          const provider = setting.key.replace('DEFAULT_MODEL_', '').toLowerCase();
+          const modelValue = setting.value;
+
+          // Check if it's a predefined model or custom
+          const availableModelsForProvider = AVAILABLE_MODELS[provider as keyof typeof AVAILABLE_MODELS] || [];
+          const isPredefined = availableModelsForProvider.some(model => model.id === modelValue);
+
+          if (isPredefined) {
+            initialModels[provider] = modelValue;
+          } else {
+            // It's a custom model
+            initialModels[provider] = 'custom';
+            initialCustomModels[provider] = modelValue;
+          }
+        }
+      });
+    }
+    setSelectedModels(initialModels);
+    setCustomModels(initialCustomModels);
+  });
+
+  useEffect(() => {
+    if (!settings) {
+      setSequentialFlags({});
+      return;
+    }
+    const settingsArray = settings as any[];
+    const flags: Record<string, boolean> = {};
+    Object.entries(SEQUENTIAL_SETTING_KEYS).forEach(([provider, key]) => {
+      const entry = settingsArray.find((setting: any) => setting.key === key);
+      if (entry && typeof entry.value === 'string') {
+        const normalized = entry.value.toLowerCase();
+        flags[provider] = ['true', '1', 'yes', 'on'].includes(normalized);
+      }
+    });
+    setSequentialFlags(flags);
+  }, [settings]);
 
   const toggleKeyVisibility = (key: string) => {
     const newVisible = new Set(visibleKeys);
@@ -88,6 +174,8 @@ export default function Integrations() {
         const val = values[field.key];
         if (typeof val === 'string' && val.trim().length > 0) {
           testValues[field.key] = val.trim();
+        } else if (configuredMap[field.key]) {
+          testValues[field.key] = configuredMap[field.key];
         }
       }
 
@@ -111,10 +199,45 @@ export default function Integrations() {
 
       // If test passed, save the settings
       toast.info("Salvando configuraÃ§Ãµes...");
+
       for (const field of integ.required_fields) {
         const val = values[field.key];
         if (typeof val === 'string' && val.trim().length > 0) {
           await apiClient.updateSetting(field.key, val.trim());
+        }
+      }
+
+      const sequentialSettingKey = SEQUENTIAL_SETTING_KEYS[integrationKey];
+      if (sequentialSettingKey) {
+        const flagValue = (sequentialFlags[integrationKey] ?? false) ? 'true' : 'false';
+        await apiClient.updateSetting(sequentialSettingKey, flagValue);
+      }
+
+      // Save default model if selected
+      const selectedModel = selectedModels[integrationKey];
+      if (selectedModel) {
+        // If it's a custom model, save the custom value, otherwise save the selected model
+        const modelToSave = selectedModel === 'custom' ? customModels[integrationKey] : selectedModel;
+        if (modelToSave) {
+          await apiClient.updateSetting(`DEFAULT_MODEL_${integrationKey.toUpperCase()}`, modelToSave);
+
+          // Update all existing projects to use this model provider and model
+          try {
+            const projects = await apiClient.getProjects();
+            if (Array.isArray(projects)) {
+              for (const project of projects) {
+                const updateData: any = {
+                  model_provider: integrationKey,
+                  model_name: modelToSave
+                };
+                await apiClient.updateProject((project as any).id, updateData);
+              }
+              console.log(`Updated ${projects.length} projects to use ${integrationKey} with model ${modelToSave}`);
+            }
+          } catch (error) {
+            console.warn('Failed to update existing projects:', error);
+            // Don't fail the whole operation if project updates fail
+          }
         }
       }
 
@@ -128,7 +251,7 @@ export default function Integrations() {
       // Set test result as success since we just validated it
       setTestResults(prev => ({ ...prev, [integrationKey]: 'success' }));
 
-      toast.success(`${integ.name} foi configurado e validado com sucesso.`);
+      toast.success(`${integ.name} foi configurado e validado com sucesso. Todos os projetos foram atualizados para usar este provedor.`);
 
       // Clear success status after 3 seconds
       setTimeout(() => {
@@ -169,6 +292,20 @@ export default function Integrations() {
           // Continue even if some settings fail to delete
           console.warn(`Failed to delete setting ${field.key}:`, error);
         }
+      }
+
+      const sequentialSettingKey = SEQUENTIAL_SETTING_KEYS[integrationKey];
+      if (sequentialSettingKey) {
+        try {
+          await apiClient.settings.delete(sequentialSettingKey);
+        } catch (error) {
+          console.warn(`Failed to delete setting ${sequentialSettingKey}:`, error);
+        }
+        setSequentialFlags(prev => {
+          const next = { ...prev };
+          delete next[integrationKey];
+          return next;
+        });
       }
 
       // Update integration status
@@ -293,6 +430,12 @@ export default function Integrations() {
     const [formValues, setFormValues] = useState<Record<string, string>>({});
     const IconComponent = categoryIcons[integration.category] || Plug;
 
+    // Check if this is an LLM provider that supports model selection
+    const isLLMProvider = integration.category === 'llm_providers';
+    const availableModels = isLLMProvider ? AVAILABLE_MODELS[integration.key as keyof typeof AVAILABLE_MODELS] || [] : [];
+    const sequentialSettingKey = SEQUENTIAL_SETTING_KEYS[integration.key];
+    const sequentialEnabled = sequentialSettingKey ? Boolean(sequentialFlags[integration.key]) : false;
+
     return (
       <Card className="card-notion">
         <CardHeader>
@@ -400,9 +543,92 @@ export default function Integrations() {
             </div>
           ))}
 
+          {sequentialSettingKey && (
+            <div className="flex items-start justify-between rounded-md border border-muted bg-muted/40 px-3 py-3">
+              <div className="space-y-1 pr-4">
+                <p className="text-sm font-medium">Executar agentes em fila</p>
+                <p className="text-xs text-muted-foreground">Evite chamadas simultâneas para reduzir erros de limite em planos gratuitos.</p>
+              </div>
+              <Switch
+                checked={sequentialEnabled}
+                onCheckedChange={(checked) => setSequentialFlags(prev => ({ ...prev, [integration.key]: checked }))}
+                aria-label="Alternar execução sequencial"
+              />
+            </div>
+          )}
+
+          {/* Model Selection for LLM Providers */}
+          {isLLMProvider && availableModels.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor={`model-${integration.key}`}>Default Model</Label>
+              <Select
+                value={selectedModels[integration.key] || ''}
+                onValueChange={(value) => {
+                  setSelectedModels(prev => ({ ...prev, [integration.key]: value }));
+                  // Clear custom model if selecting a predefined one
+                  if (value !== 'custom') {
+                    setCustomModels(prev => ({ ...prev, [integration.key]: '' }));
+                  }
+                }}
+              >
+                <SelectTrigger className="input-notion">
+                  <SelectValue placeholder="Select a model..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableModels.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <div className="flex items-center justify-between w-full">
+                        <span>{model.name}</span>
+                        <Badge variant="outline" className="ml-2 text-xs">
+                          {model.provider}
+                        </Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="custom">
+                    <div className="flex items-center gap-2">
+                      <Settings className="h-4 w-4" />
+                      <span>Custom Model</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Custom Model Input */}
+              {selectedModels[integration.key] === 'custom' && (
+                <div className="space-y-2">
+                  <Label htmlFor={`custom-model-${integration.key}`}>Custom Model Name</Label>
+                  <Input
+                    id={`custom-model-${integration.key}`}
+                    type="text"
+                    placeholder="Enter model name (e.g., openrouter/gpt-4o, claude-3-opus-20240229)"
+                    value={customModels[integration.key] || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setCustomModels(prev => ({ ...prev, [integration.key]: value }));
+                      // Update selected model with custom value
+                      setSelectedModels(prev => ({ ...prev, [integration.key]: value }));
+                    }}
+                    className="input-notion"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter the full model identifier as provided by the API provider
+                  </p>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                This model will be used as default when creating new projects
+              </p>
+            </div>
+          )}
+
           <div className="flex gap-2 pt-2">
             <Button
-              onClick={() => handleSaveIntegration(integration.key, formValues)}
+              onClick={(e) => {
+                e.preventDefault();
+                handleSaveIntegration(integration.key, formValues);
+              }}
               disabled={savingIntegrations.has(integration.key)}
               className="btn-primary"
             >
@@ -417,7 +643,10 @@ export default function Integrations() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => handleTestConnection(integration.key, formValues)}
+              onClick={(e) => {
+                e.preventDefault();
+                handleTestConnection(integration.key, formValues);
+              }}
               disabled={testResults[integration.key] === 'testing'}
               className={`${testResults[integration.key] === 'success'
                 ? 'border-green-500 text-green-600 hover:bg-green-500/10 dark:hover:bg-green-500/20'

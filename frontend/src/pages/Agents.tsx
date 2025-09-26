@@ -168,7 +168,7 @@ export default function Agents() {
       try {
         const execution = await apiClient.getExecution(executionId);
         
-        if (execution.status === 'completed' || execution.status === 'failed') {
+        if (execution.status === 'completed' || execution.status === 'error') {
           return execution;
         }
         

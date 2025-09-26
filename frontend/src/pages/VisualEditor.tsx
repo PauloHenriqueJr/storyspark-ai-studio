@@ -212,6 +212,19 @@ const initialEdges = [
   },
 ];
 
+
+
+const composeChatMessage = (lines: (string | null | undefined | false)[]) =>
+  lines.filter((line) => line !== null && line !== undefined && line !== false).join('\n');
+
+const stripAnsiCodes = (value: string) =>
+  value.replace(/\u001B\[[0-9;]*[A-Za-z]/g, '');
+
+const cleanLogLine = (line: string) =>
+  stripAnsiCodes(line)
+    .replace(/[\u2500-\u257F]/g, '')
+    .trim();
+
 function VisualEditorContent() {
   const [isLoadingFlow, setIsLoadingFlow] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -261,8 +274,8 @@ function VisualEditorContent() {
     ['running', 'pending', 'created'].includes(executionStatus), 
     [executionStatus]
   );
-  const executionHasFailed = useMemo(() => 
-    executionStatus === 'failed' || executionStatus === 'error', 
+  const executionHasFailed = useMemo(() =>
+    executionStatus === 'failed' || executionStatus === 'error',
     [executionStatus]
   );
   const showStatusPanel = useMemo(() => 
@@ -464,6 +477,7 @@ function VisualEditorContent() {
       // Refresh data
       await queryClient.invalidateQueries({ queryKey: queryKeys.agents(projectId) });
       await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
+      console.log('All agents and tasks cleared successfully');
 
       toast({
         title: "Template Aplicado",
@@ -528,7 +542,6 @@ function VisualEditorContent() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.agents(projectId) });
       await queryClient.invalidateQueries({ queryKey: queryKeys.tasks(projectId) });
       
-      console.log('All agents and tasks cleared successfully');
       
     } catch (error) {
       console.error('Error clearing agents and tasks:', error);
@@ -1114,7 +1127,13 @@ function VisualEditorContent() {
         addMessage({
           id: `workflow-created-${Date.now()}`,
           type: 'assistant',
-          content: `✅ Novo workflow criado com sucesso!\n\n📊 ${agents} agente${agents > 1 ? 's' : ''} e ${tasks} tarefa${tasks > 1 ? 's' : ''} criado${agents > 1 || tasks > 1 ? 's' : ''} no editor visual.\n\n🔄 Editor limpo e novo fluxo carregado.`,
+          content: composeChatMessage([
+            '✅ Novo workflow criado com sucesso!',
+            '',
+            `📊 ${agents} agente${agents > 1 ? 's' : ''} e ${tasks} tarefa${tasks > 1 ? 's' : ''} criado${agents > 1 || tasks > 1 ? 's' : ''} no editor visual.`,
+            '',
+            '🔄 Editor limpo e novo fluxo carregado.'
+          ]),
           timestamp: new Date().toISOString(),
         });
 
@@ -1225,7 +1244,15 @@ function VisualEditorContent() {
             addMessage({
               id: `exec-progress-${Date.now()}`,
               type: 'assistant',
-              content: `⚡ **Progresso da Execução:**\n\n📊 **Componentes concluídos:** ${completedCount}/${allNodeIds.length}\n🔄 **Status:** Executando...\n⏱️ **Tempo:** ${pollCount * 2}s\n\n👀 **Visualização:** Cards azuis = executando, verdes = concluídos!`,
+              content: composeChatMessage([
+                '⚡ **Progresso da execução:**',
+                '',
+                `📊 **Componentes concluídos:** ${completedCount}/${allNodeIds.length}`,
+                '🔄 **Status:** executando...',
+                `⏱️ **Tempo:** ${pollCount * 2}s`,
+                '',
+                '👀 **Visualização:** cards azuis = executando, verdes = concluídos.'
+              ]),
               timestamp: new Date().toISOString(),
             });
           }
@@ -1237,7 +1264,9 @@ function VisualEditorContent() {
     const resultText = typeof (executionData.output_payload as Record<string, unknown> | undefined)?.result === 'string'
       ? String((executionData.output_payload as Record<string, unknown>).result)
       : latestExecutionResult;
-    const resultSection = resultText ? `\n\nResultado:\n${resultText}` : '';
+    const resultLines = resultText
+      ? ['', '📝 **Resultado gerado:**', resultText.trim()]
+      : [];
 
     nodes.forEach(node => {
       setNodeState(node.id, 'completed');
@@ -1260,7 +1289,17 @@ function VisualEditorContent() {
     addMessage({
       id: `exec-completed-${Date.now()}`,
       type: 'assistant',
-      content: `Execução concluída!\n\nStatus: ${executionData.status}\nID: ${executionData.id}\nTempo total: ${pollCount * 2}s${resultSection}\n\nAbra ${executionsPath} para revisar o resultado completo.`,
+      content: composeChatMessage([
+        '✅ **Execução concluída!**',
+        '',
+        `🆔 **ID:** ${executionData.id}`,
+        `📊 **Status:** ${executionData.status}`,
+        `⏱️ **Tempo total:** ${pollCount * 2}s`,
+        '',
+        ...resultLines,
+        '',
+        `📂 Abra ${executionsPath} para revisar o resultado completo.`
+      ]),
       timestamp: new Date().toISOString(),
     });
 
@@ -1270,9 +1309,9 @@ function VisualEditorContent() {
 
           clearInterval(executionInterval);
 
-} else if (executionData.status === 'failed') {
-  if (lastExecutionStatusRef.current !== 'failed') {
-    lastExecutionStatusRef.current = 'failed';
+} else if (executionData.status === 'error') {
+  if (lastExecutionStatusRef.current !== 'error') {
+    lastExecutionStatusRef.current = 'error';
     const payload = executionData.output_payload as Record<string, unknown> | undefined;
     const payloadErrorValue = payload ? payload['error'] : undefined;
     const payloadError = typeof payloadErrorValue === 'string'
@@ -1303,7 +1342,17 @@ function VisualEditorContent() {
     addMessage({
       id: `exec-error-${Date.now()}`,
       type: 'assistant',
-      content: `Execução falhou.\n\nDetalhes: ${errorDetails}\nID: ${executionData.id}\nTempo: ${pollCount * 2}s\n\nVerifique os logs em ${executionsPath} e tente novamente.`,
+      content: composeChatMessage([
+        '❌ **Execução falhou.**',
+        '',
+        `🆔 **ID:** ${executionData.id}`,
+        `⏱️ **Tempo:** ${pollCount * 2}s`,
+        '',
+        '📄 **Detalhes:**',
+        errorDetails,
+        '',
+        `📂 Verifique os logs em ${executionsPath} e tente novamente.`
+      ]),
       timestamp: new Date().toISOString(),
     });
 
@@ -1326,7 +1375,15 @@ function VisualEditorContent() {
           addMessage({
             id: `exec-timeout-${Date.now()}`,
             type: 'assistant',
-            content: `⏰ **Timeout da Execução**\n\n🕐 **Status:** Tempo limite atingido\n📊 **Resultado:** Execução pode estar ainda rodando\n🆔 **ID:** ${currentExecution.id}\n\n🔧 **Ação:** Verifique o status manualmente.`,
+            content: composeChatMessage([
+              '⏰ **Timeout da execução**',
+              '',
+              '🕐 **Status:** tempo limite atingido',
+              '📊 **Resultado:** execução pode estar ainda rodando',
+              `🆔 **ID:** ${currentExecution.id}`,
+              '',
+              '🔧 **Ação:** verifique o status manualmente.'
+            ]),
             timestamp: new Date().toISOString(),
           });
         }
@@ -1356,7 +1413,14 @@ function VisualEditorContent() {
         addMessage({
           id: `exec-error-${Date.now()}`,
           type: 'assistant',
-          content: `❌ **Erro na Verificação**\n\n🚨 **Falha:** Erro ao verificar status da execução\n📊 **Status:** Todos os componentes marcados como falharam\n\n🔧 **Ação:** Verifique a conexão e tente novamente.`,
+          content: composeChatMessage([
+            '❌ **Erro ao verificar execução**',
+            '',
+            '🚨 **Falha:** erro ao consultar status da execução',
+            '📊 **Status:** todos os componentes foram marcados como falhos',
+            '',
+            '🔧 **Ação:** verifique a conexão e tente novamente.'
+          ]),
           timestamp: new Date().toISOString(),
         });
 
@@ -1370,7 +1434,7 @@ function VisualEditorContent() {
 
   // Cleanup execution state when execution completes
   useEffect(() => {
-    if (currentExecution?.status === 'completed' || currentExecution?.status === 'failed') {
+    if (currentExecution?.status === 'completed' || currentExecution?.status === 'error') {
       const timer = setTimeout(() => {
         setCurrentExecution(null);
         setRunningNodes(new Set());
@@ -1408,12 +1472,14 @@ function VisualEditorContent() {
       addMessage({
         id: `exec-id-${data.id}`,
         type: 'assistant',
-        content: `🚀 **Execução iniciada!**
-
-🆔 **ID:** ${data.id}
-📊 **Status:** ${data.status}
-
-Acompanhe o progresso diretamente nos cards do editor visual.`,
+        content: composeChatMessage([
+          '🚀 **Execução iniciada!**',
+          '',
+          `🆔 **ID:** ${data.id}`,
+          `📊 **Status:** ${data.status}`,
+          '',
+          'Acompanhe o progresso diretamente nos cards do editor visual.'
+        ]),
         timestamp: new Date().toISOString(),
       });
 
@@ -1441,9 +1507,13 @@ Acompanhe o progresso diretamente nos cards do editor visual.`,
       addMessage({
         id: `exec-error-${Date.now()}`,
         type: 'assistant',
-        content: `Erro ao iniciar o workflow.
-
-Detalhes: ${error.message || 'Erro desconhecido'}`,
+        content: composeChatMessage([
+          '❌ **Erro ao iniciar o workflow.**',
+          '',
+          `⚙️ **Detalhes:** ${error.message || 'Erro desconhecido'}`,
+          '',
+          'Tente novamente em instantes ou verifique os logs.'
+        ]),
         timestamp: new Date().toISOString(),
       });
 
@@ -1480,7 +1550,15 @@ Detalhes: ${error.message || 'Erro desconhecido'}`,
     addMessage({
       id: `exec-start-${Date.now()}`,
       type: 'assistant',
-      content: '🚀 **Iniciando execução do workflow...**\n\n📊 **Status dos componentes:**\n• Agentes: Aguardando execução\n• Tarefas: Aguardando execução\n\n⚡ **Acompanhe o progresso em tempo real nos cards do editor visual!**',
+      content: composeChatMessage([
+        '🚀 **Iniciando execução do workflow...**',
+        '',
+        '📊 **Status dos componentes:**',
+        '• Agentes: aguardando execução',
+        '• Tarefas: aguardando execução',
+        '',
+        '⚡ **Acompanhe o progresso em tempo real nos cards do editor visual!**'
+      ]),
       timestamp: new Date().toISOString()
     });
 
@@ -1599,42 +1677,46 @@ useEffect(() => {
             const recentLines = lines.slice(-3); // Last 3 lines
 
             recentLines.forEach((line) => {
-              // Clean up log messages
-              const cleanedLine = line
-                .replace(/\*\*/g, '')
-                .replace(/[🎯✅📋🔧💡]/gu, '')
-                .trim();
+              const sanitizedLine = cleanLogLine(line);
 
-              if (cleanedLine && cleanedLine.length > 10) { // Filter out very short messages
-                // Determine message type and format accordingly
-                let formattedContent = cleanedLine;
-
-                // Check if it's an agent action
-                if (cleanedLine.toLowerCase().includes('agent') ||
-                  cleanedLine.toLowerCase().includes('starting') ||
-                  cleanedLine.toLowerCase().includes('executing')) {
-                  formattedContent = `🤖 ${cleanedLine}`;
-                }
-                // Check if it's a task completion
-                else if (cleanedLine.toLowerCase().includes('completed') ||
-                  cleanedLine.toLowerCase().includes('finished') ||
-                  cleanedLine.toLowerCase().includes('done')) {
-                  formattedContent = `✅ ${cleanedLine}`;
-                }
-                // Check if it's an error
-                else if (cleanedLine.toLowerCase().includes('error') ||
-                  cleanedLine.toLowerCase().includes('failed') ||
-                  cleanedLine.toLowerCase().includes('exception')) {
-                  formattedContent = `❌ ${cleanedLine}`;
-                }
-
-                addMessage({
-                  id: `log-${data.id}-${Math.random()}`,
-                  type: 'assistant',
-                  content: formattedContent,
-                  timestamp: new Date().toISOString()
-                });
+              if (!sanitizedLine || sanitizedLine === '```') {
+                return;
               }
+
+              const normalizedLine = sanitizedLine.toLowerCase();
+
+              if (normalizedLine.startsWith('final answer:')) {
+                const finalAnswer = sanitizedLine.replace(/^final answer:\s*/i, '').trim();
+                if (finalAnswer) {
+                  addMessage({
+                    id: `log-final-${data.id}-${Math.random()}`,
+                    type: 'assistant',
+                    content: composeChatMessage([
+                      '✅ **Resposta final gerada:**',
+                      '',
+                      finalAnswer
+                    ]),
+                    timestamp: new Date().toISOString()
+                  });
+                }
+                return;
+              }
+
+              let prefix = '📝';
+              if (normalizedLine.includes('error') || normalizedLine.includes('failed') || normalizedLine.includes('exception')) {
+                prefix = '❌';
+              } else if (normalizedLine.includes('completed') || normalizedLine.includes('finished') || normalizedLine.includes('done')) {
+                prefix = '✅';
+              } else if (normalizedLine.includes('agent') || normalizedLine.includes('starting') || normalizedLine.includes('executing')) {
+                prefix = '🤖';
+              }
+
+              addMessage({
+                id: `log-${data.id}-${Math.random()}`,
+                type: 'assistant',
+                content: `${prefix} ${sanitizedLine}`,
+                timestamp: new Date().toISOString()
+              });
             });
           }
           setLastLogSize(logs.length);
@@ -1660,12 +1742,21 @@ useEffect(() => {
           })
         );
         // Chat será aberto automaticamente pelo ChatDock
+        const endMessageLines = data.status === 'completed'
+          ? [
+              '✅ Execução concluída com sucesso.',
+              '',
+              'Abra o painel de resultados para revisar o material gerado.'
+            ]
+          : [
+              '❌ Execução encerrada com erros.',
+              '',
+              data.error_message ? `⚠️ ${data.error_message}` : 'Confira os logs para entender o que aconteceu.'
+            ];
         addMessage({
           id: `exec-end-${data.id}`,
           type: 'assistant',
-          content: data.status === 'completed'
-            ? 'Execução concluída com sucesso.'
-            : `Execução falhou: ${data.error_message || 'verifique os logs'}`,
+          content: composeChatMessage(endMessageLines),
           timestamp: new Date().toISOString()
         });
         toast({
